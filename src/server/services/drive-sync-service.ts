@@ -1,7 +1,7 @@
 import { google, drive_v3 } from "googleapis";
 import { env } from "@/config/env";
 import { createAdminClient } from "@/clients/supabase/admin";
-import type { Database } from "@/types/database";
+import type { Database, Json } from "@/types/database";
 import { probeMetadata } from "@/server/services/metadata-probe-service";
 
 interface SyncSummary {
@@ -118,14 +118,19 @@ export class DriveSyncService {
     console.log(`[Sync] Querying existing DB records to identify additions/updates...`);
     const driveFileIds = qualifyingVideos.map((v) => v.id);
     const existingFileIdsSet = new Set<string>();
-    const existingFileMetadataMap = new Map<string, { dv_profile: number | null; audio_codec: string | null }>();
+    const existingFileMetadataMap = new Map<string, {
+      dv_profile: number | null;
+      audio_codec: string | null;
+      audio_streams: unknown;
+      subtitle_streams: unknown;
+    }>();
 
     const dbChunkSize = 100;
     for (let i = 0; i < driveFileIds.length; i += dbChunkSize) {
       const chunk = driveFileIds.slice(i, i + dbChunkSize);
       const { data: existingList, error } = await adminClient
         .from("media_library")
-        .select("drive_file_id, dv_profile, audio_codec")
+        .select("drive_file_id, dv_profile, audio_codec, audio_streams, subtitle_streams")
         .in("drive_file_id", chunk);
 
       if (error) throw error;
@@ -135,6 +140,8 @@ export class DriveSyncService {
           existingFileMetadataMap.set(row.drive_file_id, {
             dv_profile: row.dv_profile,
             audio_codec: row.audio_codec,
+            audio_streams: row.audio_streams,
+            subtitle_streams: row.subtitle_streams,
           });
         }
       }
@@ -189,13 +196,19 @@ export class DriveSyncService {
         summary.added++;
       }
 
-      // Use cached metadata if already probed; otherwise queue for probing
+      // Skip probing only if full stream metadata (audio_streams) is already present.
+      // audio_streams = null means not yet probed for multi-track data — re-probe to backfill.
+      const alreadyProbed = meta && meta.audio_streams !== null;
       let dvProfile: number | null = null;
       let audioCodec: string | null = null;
-      const alreadyProbed = meta && (meta.audio_codec !== null || meta.dv_profile !== null);
+      let audioStreams: Json = [];
+      let subtitleStreams: Json = [];
+
       if (alreadyProbed) {
         dvProfile = meta!.dv_profile;
         audioCodec = meta!.audio_codec;
+        audioStreams = meta!.audio_streams as Json;
+        subtitleStreams = meta!.subtitle_streams as Json;
       }
 
       const payloadIndex = upsertPayload.length;
@@ -210,6 +223,8 @@ export class DriveSyncService {
         mime_type: file.mimeType || null,
         dv_profile: dvProfile,
         audio_codec: audioCodec,
+        audio_streams: audioStreams,
+        subtitle_streams: subtitleStreams,
       });
 
       if (!alreadyProbed) {
@@ -228,6 +243,8 @@ export class DriveSyncService {
             const result = await probeMetadata(fileId, accessToken);
             upsertPayload[payloadIndex].dv_profile = result.dvProfile;
             upsertPayload[payloadIndex].audio_codec = result.audioCodec;
+            upsertPayload[payloadIndex].audio_streams = result.audioStreams as unknown as Json;
+            upsertPayload[payloadIndex].subtitle_streams = result.subtitleStreams as unknown as Json;
           } catch (err) {
             console.error(`[Sync] Probe failed for ${fileId}:`, err);
           }

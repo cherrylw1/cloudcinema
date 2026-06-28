@@ -1,5 +1,5 @@
 import { createClient } from "@/clients/supabase/server";
-import type { Media, MediaRepository } from "./index";
+import type { Media, MediaRepository, AudioStream, SubtitleStream } from "./index";
 import type { Database } from "@/types/database";
 
 type MediaRow = Database["public"]["Tables"]["media_library"]["Row"];
@@ -55,6 +55,8 @@ export class SupabaseMediaRepository implements MediaRepository {
       mimeType: row.mime_type,
       dvProfile: row.dv_profile,
       audioCodec: row.audio_codec,
+      audioStreams: (row.audio_streams as AudioStream[] | null) ?? null,
+      subtitleStreams: (row.subtitle_streams as SubtitleStream[] | null) ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -90,6 +92,8 @@ export class SupabaseMediaRepository implements MediaRepository {
       mimeType: data.mime_type,
       dvProfile: data.dv_profile,
       audioCodec: data.audio_codec,
+      audioStreams: (data.audio_streams as AudioStream[] | null) ?? null,
+      subtitleStreams: (data.subtitle_streams as SubtitleStream[] | null) ?? null,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };

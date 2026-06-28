@@ -52,6 +52,8 @@ export interface Database {
           mime_type: string | null
           dv_profile: number | null
           audio_codec: string | null
+          audio_streams: Json | null
+          subtitle_streams: Json | null
           created_at: string
           updated_at: string
         }
@@ -71,6 +73,8 @@ export interface Database {
           mime_type?: string | null
           dv_profile?: number | null
           audio_codec?: string | null
+          audio_streams?: Json | null
+          subtitle_streams?: Json | null
           created_at?: string
           updated_at?: string
         }
@@ -90,6 +94,8 @@ export interface Database {
           mime_type?: string | null
           dv_profile?: number | null
           audio_codec?: string | null
+          audio_streams?: Json | null
+          subtitle_streams?: Json | null
           created_at?: string
           updated_at?: string
         }

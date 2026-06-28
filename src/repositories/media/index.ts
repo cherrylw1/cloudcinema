@@ -1,3 +1,17 @@
+// Shared stream metadata types — used by both the repository and VideoPlayer
+export interface AudioStream {
+  index: number;       // 0-based among audio streams: ffmpeg -map 0:a:{index}
+  language: string | null;
+  codec: string | null;
+  channels: number | null;
+}
+
+export interface SubtitleStream {
+  index: number;       // 0-based among subtitle streams: ffmpeg -map 0:s:{index}
+  language: string | null;
+  codec: string | null;
+}
+
 export interface Media {
   id: string;
   driveFileId: string;
@@ -14,6 +28,8 @@ export interface Media {
   mimeType?: string | null;
   dvProfile?: number | null;
   audioCodec?: string | null;
+  audioStreams?: AudioStream[] | null;
+  subtitleStreams?: SubtitleStream[] | null;
   createdAt: string;
   updatedAt: string;
 }

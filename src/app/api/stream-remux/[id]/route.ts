@@ -8,6 +8,7 @@ import { Readable } from "stream";
 import path from "path";
 import fs from "fs";
 import { probeMetadata } from "@/server/services/metadata-probe-service";
+import type { AudioStream } from "@/repositories/media";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,11 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Parse query parameters
+  const { searchParams } = new URL(_request.url);
+  const audioTrackParam = searchParams.get("audioTrack");
+  const audioTrackIdx = audioTrackParam ? parseInt(audioTrackParam, 10) : 0;
+
   // 1. Resolve and validate route params
   const { id } = await params;
   if (!id) {
@@ -42,7 +48,7 @@ export async function GET(
   // 4. Fetch the Drive file ID and metadata from the media library database
   const { data: media, error: dbError } = await supabase
     .from("media_library")
-    .select("drive_file_id, dv_profile, audio_codec, title")
+    .select("drive_file_id, dv_profile, audio_codec, audio_streams, title")
     .eq("id", id)
     .maybeSingle();
 
@@ -117,28 +123,27 @@ export async function GET(
     let effectiveAudioCodec = audioCodec;
     let effectiveVideoCodec: string | null = null;
     let effectiveDvProfile = dvProfile;
+    let effectiveAudioStreams: AudioStream[] = (media.audio_streams as unknown as AudioStream[]) || [];
 
-    if (audioCodec === null) {
-      console.log(`[Remux] DB metadata missing for ${fileId}, probing on-the-fly...`);
+    if (audioCodec === null || effectiveAudioStreams.length === 0) {
+      console.log(`[Remux] DB metadata missing or empty for ${fileId}, probing on-the-fly...`);
       try {
         const probe = await probeMetadata(fileId, accessToken);
         effectiveAudioCodec = probe.audioCodec;
         effectiveVideoCodec = probe.videoCodec;
         effectiveDvProfile = probe.dvProfile;
-        console.log(`[Remux] Probe: video=${effectiveVideoCodec}, audio=${effectiveAudioCodec}, dv=${effectiveDvProfile}`);
+        effectiveAudioStreams = probe.audioStreams;
+        console.log(`[Remux] Probe: video=${effectiveVideoCodec}, audio=${effectiveAudioCodec}, dv=${effectiveDvProfile}, tracks=${effectiveAudioStreams.length}`);
       } catch (err) {
         console.warn(`[Remux] On-the-fly probe failed, proceeding with defaults:`, err);
       }
     }
 
+    // Identify the specific audio track codec to see if we should transcode it
+    const selectedTrack = effectiveAudioStreams.find((t: AudioStream) => t.index === audioTrackIdx);
+    const selectedCodec = selectedTrack ? selectedTrack.codec : effectiveAudioCodec;
+
     // For HEVC: ALWAYS run through dovi_tool regardless of detected dvProfile.
-    // dovi_tool safely strips DV RPU NAL units if present; it's a no-op on clean HEVC.
-    // This handles DV files where ffprobe cannot detect the profile via side_data_list.
-    //
-    // Priority for HEVC detection:
-    //   1. Live probe result (most accurate, ~1-2s delay on first play)
-    //   2. Filename keywords (DoVi, x265, HEVC etc — set by encoder, very reliable)
-    //   3. DB dv_profile (set by sync job)
     const isHevc = effectiveVideoCodec === "hevc" || isLikelyHevc || dvProfile !== null;
     const shouldStripDovi = isHevc && !isWindows && doviToolExists;
 
@@ -146,10 +151,9 @@ export async function GET(
       console.log(`[Remux] DV keywords found in filename "${title}" — will strip DV layer via dovi_tool.`);
     }
 
-    // Always transcode audio to AAC for guaranteed browser compatibility.
-    // AAC is universally supported; this handles TrueHD, EAC3, DTS, and any other format.
-    const isAudioUnsupported = effectiveAudioCodec
-      ? !["aac", "mp3", "opus", "vorbis"].includes(effectiveAudioCodec.toLowerCase())
+    // Always transcode audio to AAC if the selected codec is unsupported.
+    const isAudioUnsupported = selectedCodec
+      ? !["aac", "mp3", "opus", "vorbis"].includes(selectedCodec.toLowerCase())
       : true; // If unknown, assume unsupported and transcode to be safe
 
     if (effectiveDvProfile === 5) {
@@ -186,15 +190,17 @@ export async function GET(
         "-headers", `Authorization: Bearer ${accessToken}\r\n`,
         "-i", `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
         "-map", "0:v",
-        "-map", "1:a",
-        "-c:v", "copy"
       ];
 
-      if (isAudioUnsupported) {
-        console.log(`[Remux] Non-decodable audio (${audioCodec}) detected. Transcoding to AAC...`);
-        ffmpeg2Args.push("-c:a", "aac", "-b:a", "320k");
-      } else {
-        ffmpeg2Args.push("-c:a", "copy");
+      const hasAudio = effectiveAudioStreams && effectiveAudioStreams.length > 0;
+      if (hasAudio) {
+        ffmpeg2Args.push("-map", `1:a:${audioTrackIdx}`);
+        if (isAudioUnsupported) {
+          console.log(`[Remux] Non-decodable audio (${selectedCodec}) detected. Transcoding to AAC...`);
+          ffmpeg2Args.push("-c:a", "aac", "-b:a", "320k");
+        } else {
+          ffmpeg2Args.push("-c:a", "copy");
+        }
       }
 
       ffmpeg2Args.push(
@@ -231,14 +237,19 @@ export async function GET(
 
       const ffmpegArgs = [
         "-i", "pipe:0",
+        "-map", "0:v:0",
         "-c:v", "copy"
       ];
 
-      if (isAudioUnsupported) {
-        console.log(`[Remux] Non-decodable audio (${audioCodec}) detected. Transcoding to AAC...`);
-        ffmpegArgs.push("-c:a", "aac", "-b:a", "320k");
-      } else {
-        ffmpegArgs.push("-c:a", "copy");
+      const hasAudio = effectiveAudioStreams && effectiveAudioStreams.length > 0;
+      if (hasAudio) {
+        ffmpegArgs.push("-map", `0:a:${audioTrackIdx}`);
+        if (isAudioUnsupported) {
+          console.log(`[Remux] Non-decodable audio (${selectedCodec}) detected. Transcoding to AAC...`);
+          ffmpegArgs.push("-c:a", "aac", "-b:a", "320k");
+        } else {
+          ffmpegArgs.push("-c:a", "copy");
+        }
       }
 
       ffmpegArgs.push(
