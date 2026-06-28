@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Menu, Search, Sun, Moon, User } from "lucide-react";
-import { siteConfig } from "@/config/site";
+import { navigationItems } from "@/config/navigation";
 
 interface TopBarProps {
   onOpenSidebar: () => void;
@@ -26,7 +26,7 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
   // Find page title from path
   const getPageTitle = () => {
     if (pathname === "/") return "Home";
-    const item = siteConfig.navItems.find((n) => n.href === pathname);
+    const item = navigationItems.find((n) => n.href === pathname);
     return item ? item.label : "CloudCinema";
   };
 

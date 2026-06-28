@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { siteConfig } from "@/config/site";
+import { cn } from "@/lib/cn";
+import { navigationItems } from "@/config/navigation";
+import { getCurrentYear } from "@/lib/format";
 import { Logo } from "@/components/common/Logo";
 import {
   Home,
@@ -66,7 +67,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Navigation Items */}
         <nav className="flex-1 space-y-1.5">
-          {siteConfig.navItems.map((item) => {
+          {navigationItems.map((item) => {
             const Icon = iconMap[item.icon] || Home;
             const isActive = pathname === item.href;
 
@@ -91,8 +92,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Footer info */}
         <div className="border-t border-border pt-4 text-xs text-foreground/40">
-          <p>© {new Date().getFullYear()} CloudCinema</p>
-          <p className="mt-0.5">v0.1.0 Foundation</p>
+          <p>© {getCurrentYear()} CloudCinema</p>
+          <p className="mt-0.5">v0.2.0 Core Infrastructure</p>
         </div>
       </aside>
     </>

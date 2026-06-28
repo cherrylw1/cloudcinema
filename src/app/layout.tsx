@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "@/styles/globals.css";
+import { env } from "@/config/env";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { AppShell } from "@/components/layout/AppShell";
 
@@ -15,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CloudCinema",
+  title: env.appName,
   description: "A premium personal media streaming platform.",
 };
 

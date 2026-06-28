@@ -1,5 +1,5 @@
 import React from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/cn";
 
 interface PageContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string;
