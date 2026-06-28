@@ -9,7 +9,7 @@ export default function Home() {
     >
       <GlassPanel>
         <p className="text-sm text-foreground/75 leading-relaxed">
-          The home feed is currently empty. Media content and dashboard feeds will appear here in future updates.
+          Deployment test — Sun Jun 28 2026 10:54:09
         </p>
       </GlassPanel>
     </PageContainer>
