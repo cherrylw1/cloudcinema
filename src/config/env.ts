@@ -20,16 +20,22 @@ const validateUrl = (url: string): string => {
   }
 };
 
+// Directly reference NEXT_PUBLIC_ variables as literals for build-time compilation support in browser bundles
+const rawAppName = process.env.NEXT_PUBLIC_APP_NAME || "CloudCinema";
+const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const rawSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+
 export const env = {
   // Required
-  appName: getEnv("NEXT_PUBLIC_APP_NAME", "CloudCinema", true),
-  appUrl: validateUrl(getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000", true)),
+  appName: rawAppName,
+  appUrl: validateUrl(rawAppUrl),
   isProduction: process.env.NODE_ENV === "production",
   isDevelopment: process.env.NODE_ENV === "development",
 
   // Optional (Supabase Integration Placeholders)
-  supabaseUrl: getEnv("NEXT_PUBLIC_SUPABASE_URL"),
-  supabaseAnonKey: getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+  supabaseUrl: rawSupabaseUrl,
+  supabaseAnonKey: rawSupabaseAnonKey,
   supabaseServiceRoleKey: getEnv("SUPABASE_SERVICE_ROLE_KEY"),
 
   // Optional (Google Drive Integration Placeholders)
