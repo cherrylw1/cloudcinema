@@ -1,8 +1,7 @@
 import { google, drive_v3 } from "googleapis";
 import { env } from "@/config/env";
 import { createAdminClient } from "@/clients/supabase/admin";
-import type { Database, Json } from "@/types/database";
-import { probeMetadata } from "@/server/services/metadata-probe-service";
+import type { Database } from "@/types/database";
 
 interface SyncSummary {
   scanned: number;    // Total elements processed (folders + files)
@@ -14,7 +13,6 @@ interface SyncSummary {
 }
 
 export class DriveSyncService {
-  private auth;
   private drive;
 
   constructor() {
@@ -28,7 +26,6 @@ export class DriveSyncService {
       refresh_token: env.googleRefreshToken,
     });
 
-    this.auth = oauth2Client;
     this.drive = google.drive({ version: "v3", auth: oauth2Client });
   }
 
@@ -118,19 +115,14 @@ export class DriveSyncService {
     console.log(`[Sync] Querying existing DB records to identify additions/updates...`);
     const driveFileIds = qualifyingVideos.map((v) => v.id);
     const existingFileIdsSet = new Set<string>();
-    const existingFileMetadataMap = new Map<string, {
-      dv_profile: number | null;
-      audio_codec: string | null;
-      audio_streams: unknown;
-      subtitle_streams: unknown;
-    }>();
+    const existingFileMetadataMap = new Map<string, { processing_status: string }>();
 
     const dbChunkSize = 100;
     for (let i = 0; i < driveFileIds.length; i += dbChunkSize) {
       const chunk = driveFileIds.slice(i, i + dbChunkSize);
       const { data: existingList, error } = await adminClient
         .from("media_library")
-        .select("drive_file_id, dv_profile, audio_codec, audio_streams, subtitle_streams")
+        .select("drive_file_id, processing_status")
         .in("drive_file_id", chunk);
 
       if (error) throw error;
@@ -138,28 +130,15 @@ export class DriveSyncService {
         for (const row of existingList) {
           existingFileIdsSet.add(row.drive_file_id);
           existingFileMetadataMap.set(row.drive_file_id, {
-            dv_profile: row.dv_profile,
-            audio_codec: row.audio_codec,
-            audio_streams: row.audio_streams,
-            subtitle_streams: row.subtitle_streams,
+            processing_status: row.processing_status || "none",
           });
         }
       }
     }
 
-    console.log(`[Sync] Requesting Google Drive access token for metadata probing...`);
-    const tokenInfo = await this.auth.getAccessToken();
-    const accessToken = tokenInfo.token;
-    if (!accessToken) {
-      throw new Error("[Sync] Failed to retrieve Google Drive OAuth access token for probing.");
-    }
-
     console.log(`[Sync] Preparing catalog payload...`);
-
-    // Phase 1: Build full payload and identify which files need probing
     type PayloadRow = Database["public"]["Tables"]["media_library"]["Insert"];
     const upsertPayload: PayloadRow[] = [];
-    const filesToProbe: Array<{ fileId: string; payloadIndex: number }> = [];
 
     for (const file of qualifyingVideos) {
       if (!file.id) continue;
@@ -196,22 +175,8 @@ export class DriveSyncService {
         summary.added++;
       }
 
-      // Skip probing only if full stream metadata (audio_streams) is already present.
-      // audio_streams = null means not yet probed for multi-track data — re-probe to backfill.
-      const alreadyProbed = meta && meta.audio_streams !== null;
-      let dvProfile: number | null = null;
-      let audioCodec: string | null = null;
-      let audioStreams: Json = [];
-      let subtitleStreams: Json = [];
+      const processingStatus = meta ? meta.processing_status : "none";
 
-      if (alreadyProbed) {
-        dvProfile = meta!.dv_profile;
-        audioCodec = meta!.audio_codec;
-        audioStreams = meta!.audio_streams as Json;
-        subtitleStreams = meta!.subtitle_streams as Json;
-      }
-
-      const payloadIndex = upsertPayload.length;
       upsertPayload.push({
         drive_file_id: file.id,
         title,
@@ -221,37 +186,9 @@ export class DriveSyncService {
         media_type: mediaType,
         file_size: fileSize,
         mime_type: file.mimeType || null,
-        dv_profile: dvProfile,
-        audio_codec: audioCodec,
-        audio_streams: audioStreams,
-        subtitle_streams: subtitleStreams,
+        processing_status: processingStatus,
       });
-
-      if (!alreadyProbed) {
-        filesToProbe.push({ fileId: file.id, payloadIndex });
-      }
     }
-
-    // Phase 2: Run all outstanding probes concurrently in batches of 10
-    const PROBE_CONCURRENCY = 10;
-    console.log(`[Sync] Probing ${filesToProbe.length} files for metadata (concurrency=${PROBE_CONCURRENCY})...`);
-    for (let i = 0; i < filesToProbe.length; i += PROBE_CONCURRENCY) {
-      const batch = filesToProbe.slice(i, i + PROBE_CONCURRENCY);
-      await Promise.all(
-        batch.map(async ({ fileId, payloadIndex }) => {
-          try {
-            const result = await probeMetadata(fileId, accessToken);
-            upsertPayload[payloadIndex].dv_profile = result.dvProfile;
-            upsertPayload[payloadIndex].audio_codec = result.audioCodec;
-            upsertPayload[payloadIndex].audio_streams = result.audioStreams as unknown as Json;
-            upsertPayload[payloadIndex].subtitle_streams = result.subtitleStreams as unknown as Json;
-          } catch (err) {
-            console.error(`[Sync] Probe failed for ${fileId}:`, err);
-          }
-        })
-      );
-    }
-    console.log(`[Sync] Probe phase complete. ${filesToProbe.length} files processed.`);
 
     console.log(`[Sync] Upserting ${upsertPayload.length} media records in batches of 100...`);
     const upsertChunkSize = 100;

@@ -52,6 +52,9 @@ export const env = {
   // Optional (AniSkip / Subtitles Integration Placeholders)
   aniSkipApiUrl: getEnv("ANISKIP_API_URL"),
   openSubtitlesApiKey: getEnv("OPENSUBTITLES_API_KEY"),
+
+  // GitHub Integration for Actions Offloading
+  githubPat: getEnv("GITHUB_PAT"),
 } as const;
 
 export type Env = typeof env;

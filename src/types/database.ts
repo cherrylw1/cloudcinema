@@ -54,6 +54,9 @@ export interface Database {
           audio_codec: string | null
           audio_streams: Json | null
           subtitle_streams: Json | null
+          processing_status: string
+          audio_variants: Json | null
+          subtitle_tracks: Json | null
           created_at: string
           updated_at: string
         }
@@ -75,6 +78,9 @@ export interface Database {
           audio_codec?: string | null
           audio_streams?: Json | null
           subtitle_streams?: Json | null
+          processing_status?: string
+          audio_variants?: Json | null
+          subtitle_tracks?: Json | null
           created_at?: string
           updated_at?: string
         }
@@ -96,6 +102,9 @@ export interface Database {
           audio_codec?: string | null
           audio_streams?: Json | null
           subtitle_streams?: Json | null
+          processing_status?: string
+          audio_variants?: Json | null
+          subtitle_tracks?: Json | null
           created_at?: string
           updated_at?: string
         }

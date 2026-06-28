@@ -12,6 +12,16 @@ export interface SubtitleStream {
   codec: string | null;
 }
 
+export interface AudioVariant {
+  language: string;
+  driveFileId: string;
+}
+
+export interface SubtitleTrack {
+  language: string;
+  content: string; // Raw WebVTT text content
+}
+
 export interface Media {
   id: string;
   driveFileId: string;
@@ -30,6 +40,9 @@ export interface Media {
   audioCodec?: string | null;
   audioStreams?: AudioStream[] | null;
   subtitleStreams?: SubtitleStream[] | null;
+  processingStatus: string;
+  audioVariants?: AudioVariant[] | null;
+  subtitleTracks?: SubtitleTrack[] | null;
   createdAt: string;
   updatedAt: string;
 }

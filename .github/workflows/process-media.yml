@@ -1,0 +1,50 @@
+name: Offloaded Media Processor
+
+on:
+  workflow_dispatch:
+    inputs:
+      media_id:
+        description: 'The Supabase Media ID to transcode and process'
+        required: true
+        type: string
+
+jobs:
+  process-media:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg curl tar wget
+
+      - name: Install dovi_tool
+        run: |
+          # Fetch dovi_tool binary release and make it executable globally
+          wget -q https://github.com/quietvoid/dovi_tool/releases/download/2.1.2/dovi_tool-2.1.2-x86_64-unknown-linux-musl.tar.gz
+          tar -xzf dovi_tool-2.1.2-x86_64-unknown-linux-musl.tar.gz
+          sudo mv dovi_tool /usr/local/bin/
+          rm dovi_tool-2.1.2-x86_64-unknown-linux-musl.tar.gz
+          dovi_tool --version
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Execute Media Processing Runner
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+        run: npx tsx scripts/process-media-runner.ts "${{ github.event.inputs.media_id }}"
