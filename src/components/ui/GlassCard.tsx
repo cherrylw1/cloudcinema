@@ -1,25 +1,20 @@
-"use client";
-
 import React from "react";
-import { motion, HTMLMotionProps } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-interface GlassCardProps extends HTMLMotionProps<"div"> {
+interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children?: React.ReactNode;
 }
 
 export function GlassCard({ children, className, ...props }: GlassCardProps) {
   return (
-    <motion.div
-      whileHover={{ y: -4, scale: 1.01 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
+    <div
       className={cn(
-        "glass glass-hover rounded-2xl p-5 text-card-foreground",
+        "glass glass-hover rounded-2xl p-5 text-card-foreground transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.01]",
         className
       )}
       {...props}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
