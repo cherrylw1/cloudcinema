@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   // using os.platform() + os.arch().
   outputFileTracingIncludes: {
     "/api/sync": ["./node_modules/ffprobe-static/bin/linux/x64/ffprobe"],
+    "/api/stream-remux/[id]": ["./node_modules/ffprobe-static/bin/linux/x64/ffprobe"],
   },
 };
 

@@ -42,7 +42,7 @@ export async function GET(
   // 4. Fetch the Drive file ID and metadata from the media library database
   const { data: media, error: dbError } = await supabase
     .from("media_library")
-    .select("drive_file_id, dv_profile, audio_codec")
+    .select("drive_file_id, dv_profile, audio_codec, title")
     .eq("id", id)
     .maybeSingle();
 
@@ -53,6 +53,13 @@ export async function GET(
   const fileId = media.drive_file_id;
   const dvProfile = media.dv_profile;
   const audioCodec = media.audio_codec;
+  const title = media.title || "";
+
+  // Filename-based HEVC/DV detection — reliable without needing ffprobe.
+  // DV-encoded files are always HEVC and virtually always carry these tags
+  // in the filename (set by the encoder/release group).
+  const isLikelyHevc = /\b(hevc|x265|h\.?265|dovi|dov1|dolby[.\s_-]?vision|hdr10|uhd)\b/i.test(title);
+  const isLikelyDV   = /\b(dovi|dov1|dolby[.\s_-]?vision|dv[.\s_-]?hdr|\bDV\b)\b/i.test(title);
 
   try {
     // 5. Initialize the Google Drive Client
@@ -127,8 +134,17 @@ export async function GET(
     // For HEVC: ALWAYS run through dovi_tool regardless of detected dvProfile.
     // dovi_tool safely strips DV RPU NAL units if present; it's a no-op on clean HEVC.
     // This handles DV files where ffprobe cannot detect the profile via side_data_list.
-    const isHevc = effectiveVideoCodec === "hevc" || dvProfile !== null;
+    //
+    // Priority for HEVC detection:
+    //   1. Live probe result (most accurate, ~1-2s delay on first play)
+    //   2. Filename keywords (DoVi, x265, HEVC etc — set by encoder, very reliable)
+    //   3. DB dv_profile (set by sync job)
+    const isHevc = effectiveVideoCodec === "hevc" || isLikelyHevc || dvProfile !== null;
     const shouldStripDovi = isHevc && !isWindows && doviToolExists;
+
+    if (isLikelyDV) {
+      console.log(`[Remux] DV keywords found in filename "${title}" — will strip DV layer via dovi_tool.`);
+    }
 
     // Always transcode audio to AAC for guaranteed browser compatibility.
     // AAC is universally supported; this handles TrueHD, EAC3, DTS, and any other format.
