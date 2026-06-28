@@ -159,7 +159,7 @@ async function main() {
       // We run this natively via shell execution
       const pipeCommand = `curl -s -H "Authorization: Bearer ${accessToken}" -L "${sourceUrl}" | ` +
         `ffmpeg -y -i pipe:0 -an -c:v copy -bsf:v hevc_mp4toannexb -f hevc pipe:1 | ` +
-        `dovi_tool remove - | ` +
+        `dovi_tool remove - -o - | ` +
         `ffmpeg -y -i pipe:0 -headers "Authorization: Bearer ${accessToken}\r\n" -i "${sourceUrl}" ` +
         `-map 0:v -map 1:a:0 -c:v libx264 -preset fast -crf 22 -c:a aac -b:a 192k -vf "${vfFilters}" -movflags +faststart ${outputFilename}`;
       
