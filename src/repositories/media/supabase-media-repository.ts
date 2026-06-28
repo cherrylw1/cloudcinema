@@ -53,6 +53,8 @@ export class SupabaseMediaRepository implements MediaRepository {
       fileSize: row.file_size,
       tmdbId: row.tmdb_id,
       mimeType: row.mime_type,
+      dvProfile: row.dv_profile,
+      audioCodec: row.audio_codec,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -86,6 +88,8 @@ export class SupabaseMediaRepository implements MediaRepository {
       fileSize: data.file_size,
       tmdbId: data.tmdb_id,
       mimeType: data.mime_type,
+      dvProfile: data.dv_profile,
+      audioCodec: data.audio_codec,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };

@@ -12,6 +12,8 @@ export interface Media {
   fileSize?: number | null;
   tmdbId?: number | null;
   mimeType?: string | null;
+  dvProfile?: number | null;
+  audioCodec?: string | null;
   createdAt: string;
   updatedAt: string;
 }

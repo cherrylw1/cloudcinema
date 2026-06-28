@@ -50,6 +50,8 @@ export interface Database {
           file_size: number | null
           tmdb_id: number | null
           mime_type: string | null
+          dv_profile: number | null
+          audio_codec: string | null
           created_at: string
           updated_at: string
         }
@@ -67,6 +69,8 @@ export interface Database {
           file_size?: number | null
           tmdb_id?: number | null
           mime_type?: string | null
+          dv_profile?: number | null
+          audio_codec?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -84,6 +88,8 @@ export interface Database {
           file_size?: number | null
           tmdb_id?: number | null
           mime_type?: string | null
+          dv_profile?: number | null
+          audio_codec?: string | null
           created_at?: string
           updated_at?: string
         }

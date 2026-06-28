@@ -2,6 +2,7 @@ import { google, drive_v3 } from "googleapis";
 import { env } from "@/config/env";
 import { createAdminClient } from "@/clients/supabase/admin";
 import type { Database } from "@/types/database";
+import { probeMetadata } from "@/server/services/metadata-probe-service";
 
 interface SyncSummary {
   scanned: number;    // Total elements processed (folders + files)
@@ -13,6 +14,7 @@ interface SyncSummary {
 }
 
 export class DriveSyncService {
+  private auth;
   private drive;
 
   constructor() {
@@ -26,6 +28,7 @@ export class DriveSyncService {
       refresh_token: env.googleRefreshToken,
     });
 
+    this.auth = oauth2Client;
     this.drive = google.drive({ version: "v3", auth: oauth2Client });
   }
 
@@ -115,25 +118,39 @@ export class DriveSyncService {
     console.log(`[Sync] Querying existing DB records to identify additions/updates...`);
     const driveFileIds = qualifyingVideos.map((v) => v.id);
     const existingFileIdsSet = new Set<string>();
+    const existingFileMetadataMap = new Map<string, { dv_profile: number | null; audio_codec: string | null }>();
 
     const dbChunkSize = 100;
     for (let i = 0; i < driveFileIds.length; i += dbChunkSize) {
       const chunk = driveFileIds.slice(i, i + dbChunkSize);
       const { data: existingList, error } = await adminClient
         .from("media_library")
-        .select("drive_file_id")
+        .select("drive_file_id, dv_profile, audio_codec")
         .in("drive_file_id", chunk);
 
       if (error) throw error;
       if (existingList) {
         for (const row of existingList) {
           existingFileIdsSet.add(row.drive_file_id);
+          existingFileMetadataMap.set(row.drive_file_id, {
+            dv_profile: row.dv_profile,
+            audio_codec: row.audio_codec,
+          });
         }
       }
     }
 
-    console.log(`[Sync] Preparing catalog payload...`);
+    console.log(`[Sync] Requesting Google Drive access token for metadata probing...`);
+    const tokenInfo = await this.auth.getAccessToken();
+    const accessToken = tokenInfo.token;
+    if (!accessToken) {
+      throw new Error("[Sync] Failed to retrieve Google Drive OAuth access token for probing.");
+    }
+
+    console.log(`[Sync] Preparing catalog payload and performing ffprobe metadata checks...`);
     const upsertPayload: Database["public"]["Tables"]["media_library"]["Insert"][] = [];
+    const MAX_PROBES = 50; // Cap probes per sync to prevent timeouts and API rate limits
+    let probesRun = 0;
 
     for (const file of qualifyingVideos) {
       if (!file.id) continue;
@@ -163,10 +180,41 @@ export class DriveSyncService {
       const fileSize = file.size ? parseInt(file.size, 10) : null;
       const isExisting = existingFileIdsSet.has(file.id);
 
+      let dvProfile: number | null = null;
+      let audioCodec: string | null = null;
+
       if (isExisting) {
         summary.updated++;
+        const meta = existingFileMetadataMap.get(file.id);
+        
+        // If metadata is already present in DB, use it and avoid re-probing
+        if (meta && (meta.dv_profile !== null || meta.audio_codec !== null)) {
+          dvProfile = meta.dv_profile;
+          audioCodec = meta.audio_codec;
+        } else if (probesRun < MAX_PROBES) {
+          // Missing metadata, run probe
+          try {
+            const probeResult = await probeMetadata(file.id, accessToken);
+            dvProfile = probeResult.dvProfile;
+            audioCodec = probeResult.audioCodec;
+            probesRun++;
+          } catch (err) {
+            console.error(`[Sync] Failed to probe existing file ${file.id}:`, err);
+          }
+        }
       } else {
         summary.added++;
+        if (probesRun < MAX_PROBES) {
+          // New file, run probe
+          try {
+            const probeResult = await probeMetadata(file.id, accessToken);
+            dvProfile = probeResult.dvProfile;
+            audioCodec = probeResult.audioCodec;
+            probesRun++;
+          } catch (err) {
+            console.error(`[Sync] Failed to probe new file ${file.id}:`, err);
+          }
+        }
       }
 
       upsertPayload.push({
@@ -178,6 +226,8 @@ export class DriveSyncService {
         media_type: mediaType,
         file_size: fileSize,
         mime_type: file.mimeType || null,
+        dv_profile: dvProfile,
+        audio_codec: audioCodec,
       });
     }
 

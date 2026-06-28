@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/clients/supabase/server";
 import { google } from "googleapis";
 import { env } from "@/config/env";
-import { spawn } from "child_process";
+import { spawn, ChildProcess } from "child_process";
 import ffmpegPath from "ffmpeg-static";
 import { Readable } from "stream";
+import path from "path";
+import fs from "fs";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +38,10 @@ export async function GET(
     return NextResponse.json({ error: "Approval pending." }, { status: 403 });
   }
 
-  // 4. Fetch the Drive file ID from the media library database
+  // 4. Fetch the Drive file ID and metadata from the media library database
   const { data: media, error: dbError } = await supabase
     .from("media_library")
-    .select("drive_file_id")
+    .select("drive_file_id, dv_profile, audio_codec")
     .eq("id", id)
     .maybeSingle();
 
@@ -48,6 +50,8 @@ export async function GET(
   }
 
   const fileId = media.drive_file_id;
+  const dvProfile = media.dv_profile;
+  const audioCodec = media.audio_codec;
 
   try {
     // 5. Initialize the Google Drive Client
@@ -62,6 +66,12 @@ export async function GET(
     });
 
     const drive = google.drive({ version: "v3", auth: oauth2Client });
+    const tokenInfo = await oauth2Client.getAccessToken();
+    const accessToken = tokenInfo.token;
+
+    if (!accessToken) {
+      throw new Error("Failed to retrieve Google Drive OAuth access token.");
+    }
 
     // 6. Fetch the full file stream from Google Drive
     const driveStreamRes = await drive.files.get(
@@ -76,51 +86,141 @@ export async function GET(
 
     const driveStream = driveStreamRes.data as unknown as Readable;
 
-    // 7. Verify FFmpeg binary exists
     if (!ffmpegPath) {
       throw new Error("FFmpeg static binary path could not be resolved.");
     }
 
-    // 8. Spawn FFmpeg process
+    // Resolve dovi_tool path and set executable permissions
+    const doviToolPath = path.join(process.cwd(), "src/bin/dovi_tool");
+    const isWindows = process.platform === "win32";
+    const doviToolExists = fs.existsSync(doviToolPath);
+
+    if (doviToolExists && !isWindows) {
+      try {
+        fs.chmodSync(doviToolPath, "755");
+      } catch (err) {
+        console.warn("[Remux] Failed to set permissions on dovi_tool:", err);
+      }
+    }
+
+    // Determine transcoding requirements
+    const browserDecodableAudioCodecs = ["aac", "mp3", "opus", "vorbis", "flac"];
+    const isAudioUnsupported = audioCodec && !browserDecodableAudioCodecs.includes(audioCodec.toLowerCase());
+
+    const shouldStripDovi = (dvProfile === 7 || dvProfile === 8) && !isWindows && doviToolExists;
+
+    if (dvProfile === 5) {
+      console.log(`[Remux] Detected Dolby Vision Profile 5 for file ${fileId}. Passing through color layer unchanged.`);
+    }
+
+    let webStream: ReadableStream;
+    let processesToKill: ChildProcess[] = [];
+
     // NOTE: This route DOES NOT support seeking (HTTP Range requests). It always serves a
     // sequential lossless stream from the start (0). This is a known design constraint.
-    const ffmpegProcess = spawn(ffmpegPath, [
-      "-i", "pipe:0", // Read input from standard input pipe
-      "-c", "copy",   // Copy video/audio streams losslessly (no transcoding/re-encoding)
-      "-movflags", "frag_keyframe+empty_moov+default_base_moof", // Fragmented MP4 flags for streaming piping
-      "-f", "mp4",    // Output container format
-      "pipe:1"        // Write output to standard output pipe
-    ]);
+    if (shouldStripDovi) {
+      console.log(`[Remux] Dolby Vision Profile ${dvProfile} detected. Spawning dovi_tool extraction pipeline...`);
 
-    // Pipe Drive stream into FFmpeg stdin
-    driveStream.pipe(ffmpegProcess.stdin);
+      // Process 1: Extract HEVC bitstream with Annex B conversion
+      const ffmpeg1 = spawn(ffmpegPath, [
+        "-i", "pipe:0",
+        "-an",
+        "-c:v", "copy",
+        "-bsf:v", "hevc_mp4toannexb",
+        "-f", "hevc",
+        "pipe:1"
+      ]);
 
-    // Capture logs for debugging
-    ffmpegProcess.stderr.on("data", (chunk) => {
-      console.log(`[FFmpeg Remux Log] ${chunk.toString().trim()}`);
-    });
+      // Process 2: Strip Dolby Vision RPU metadata
+      const dovi = spawn(doviToolPath, [
+        "remove",
+        "-"
+      ]);
 
-    // Handle stream errors
-    driveStream.on("error", (err) => {
-      console.error("[Remux Proxy] Drive stream failed:", err);
-      ffmpegProcess.kill();
-    });
+      // Process 3: Remap audio and video, mux back to fragmented MP4
+      const ffmpeg2Args = [
+        "-i", "pipe:0", // Input from dovi_tool
+        "-headers", `Authorization: Bearer ${accessToken}\r\n`,
+        "-i", `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        "-map", "0:v",
+        "-map", "1:a",
+        "-c:v", "copy"
+      ];
 
-    ffmpegProcess.stdin.on("error", (err) => {
-      console.error("[Remux Proxy] FFmpeg stdin error:", err);
-    });
-
-    // Convert FFmpeg stdout standard node stream to web stream for Next.js response context
-    const webStream = new ReadableStream({
-      start(controller) {
-        ffmpegProcess.stdout.on("data", (chunk) => controller.enqueue(chunk));
-        ffmpegProcess.stdout.on("end", () => controller.close());
-        ffmpegProcess.stdout.on("error", (err) => controller.error(err));
-      },
-      cancel() {
-        ffmpegProcess.kill();
+      if (isAudioUnsupported) {
+        console.log(`[Remux] Non-decodable audio (${audioCodec}) detected. Transcoding to AAC...`);
+        ffmpeg2Args.push("-c:a", "aac", "-b:a", "320k");
+      } else {
+        ffmpeg2Args.push("-c:a", "copy");
       }
-    });
+
+      ffmpeg2Args.push(
+        "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+        "-f", "mp4",
+        "pipe:1"
+      );
+
+      const ffmpeg2 = spawn(ffmpegPath, ffmpeg2Args);
+
+      processesToKill = [ffmpeg1, dovi, ffmpeg2];
+
+      // Pipe streams
+      driveStream.pipe(ffmpeg1.stdin);
+      ffmpeg1.stdout.pipe(dovi.stdin);
+      dovi.stdout.pipe(ffmpeg2.stdin);
+
+      webStream = new ReadableStream({
+        start(controller) {
+          ffmpeg2.stdout.on("data", (chunk) => controller.enqueue(chunk));
+          ffmpeg2.stdout.on("end", () => controller.close());
+          ffmpeg2.stdout.on("error", (err) => controller.error(err));
+        },
+        cancel() {
+          processesToKill.forEach((p) => {
+            try { p.kill(); } catch {}
+          });
+          driveStream.destroy();
+        }
+      });
+    } else {
+      // Normal remux path (with optional audio transcoding)
+      console.log(`[Remux] Spawning single FFmpeg remuxer...`);
+
+      const ffmpegArgs = [
+        "-i", "pipe:0",
+        "-c:v", "copy"
+      ];
+
+      if (isAudioUnsupported) {
+        console.log(`[Remux] Non-decodable audio (${audioCodec}) detected. Transcoding to AAC...`);
+        ffmpegArgs.push("-c:a", "aac", "-b:a", "320k");
+      } else {
+        ffmpegArgs.push("-c:a", "copy");
+      }
+
+      ffmpegArgs.push(
+        "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+        "-f", "mp4",
+        "pipe:1"
+      );
+
+      const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs);
+      processesToKill = [ffmpegProcess];
+
+      driveStream.pipe(ffmpegProcess.stdin);
+
+      webStream = new ReadableStream({
+        start(controller) {
+          ffmpegProcess.stdout.on("data", (chunk) => controller.enqueue(chunk));
+          ffmpegProcess.stdout.on("end", () => controller.close());
+          ffmpegProcess.stdout.on("error", (err) => controller.error(err));
+        },
+        cancel() {
+          ffmpegProcess.kill();
+          driveStream.destroy();
+        }
+      });
+    }
 
     return new Response(webStream, {
       status: 200,

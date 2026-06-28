@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { Button } from "@/components/ui/button";
 import { Database, RefreshCw, AlertCircle, CheckCircle2, Film } from "lucide-react";
+import { getMediaStatsAction } from "@/server/actions/media-actions";
 
 export default function SettingsPage() {
   const [syncing, setSyncing] = useState(false);
@@ -25,6 +26,23 @@ export default function SettingsPage() {
   } | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
 
+  const [stats, setStats] = useState<{ dv5Count: number; dv78Count: number } | null>(null);
+
+  const fetchStats = async () => {
+    try {
+      const data = await getMediaStatsAction();
+      setStats(data);
+    } catch (err) {
+      console.error("Failed to load Dolby Vision stats:", err);
+    }
+  };
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    fetchStats();
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   const handleSync = async () => {
     setSyncing(true);
     setError(null);
@@ -41,6 +59,7 @@ export default function SettingsPage() {
           updated: data.updated ?? 0,
           skipped: data.skipped ?? 0,
         });
+        await fetchStats(); // Refresh stats after sync
       } else {
         setError(data.error || "An error occurred during library synchronization.");
       }
@@ -67,6 +86,7 @@ export default function SettingsPage() {
           unmatched: data.unmatched ?? 0,
           reclassifiedAnime: data.reclassifiedAnime ?? 0,
         });
+        await fetchStats(); // Refresh stats after metadata sync
       } else {
         setMetaError(data.error || "An error occurred during metadata synchronization.");
       }
@@ -115,6 +135,29 @@ export default function SettingsPage() {
               {metaSyncing ? "Fetching..." : "Fetch Metadata"}
             </Button>
           </div>
+
+          {/* Dolby Vision Stats Display */}
+          {stats && (
+            <div className="bg-card/25 border border-border/40 rounded-xl p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-foreground">Dolby Vision Content Status</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-card/30 border border-border/30 p-3 rounded-lg flex items-center justify-between">
+                  <div>
+                    <span className="block text-xs text-foreground/50">Profile 5 (Unsupported)</span>
+                    <span className="text-lg font-bold text-red-500">{stats.dv5Count}</span>
+                  </div>
+                  <span className="text-[10px] text-red-500/80 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 font-medium">Transcoding Required</span>
+                </div>
+                <div className="bg-card/30 border border-border/30 p-3 rounded-lg flex items-center justify-between">
+                  <div>
+                    <span className="block text-xs text-foreground/50">Profile 7 / 8 (Supported)</span>
+                    <span className="text-lg font-bold text-green-500">{stats.dv78Count}</span>
+                  </div>
+                  <span className="text-[10px] text-green-500/80 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20 font-medium">On-the-fly Extractable</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Sync Results */}
           {error && (
