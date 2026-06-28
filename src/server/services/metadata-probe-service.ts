@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { spawn } from "child_process";
-import ffprobeStatic from "ffprobe-static";
+import path from "path";
+import fs from "fs";
 
 export interface ProbeResult {
   dvProfile: number | null;
@@ -13,9 +14,28 @@ export interface ProbeResult {
  */
 export function probeMetadata(fileId: string, accessToken: string): Promise<ProbeResult> {
   return new Promise((resolve) => {
-    const ffprobePath = ffprobeStatic.path;
-    if (!ffprobePath) {
-      console.warn("[Probe] ffprobe static binary path could not be resolved.");
+    let ffprobePath = path.join(process.cwd(), "src/bin/ffprobe");
+    const isWindows = process.platform === "win32";
+
+    if (isWindows) {
+      try {
+        const ffprobeStatic = eval("require")("ffprobe-static");
+        ffprobePath = ffprobeStatic.path;
+      } catch (err) {
+        console.warn("[Probe] Failed to resolve ffprobe-static locally on Windows:", err);
+      }
+    } else {
+      if (fs.existsSync(ffprobePath)) {
+        try {
+          fs.chmodSync(ffprobePath, "755");
+        } catch (err) {
+          console.warn("[Probe] Failed to set permissions on ffprobe binary:", err);
+        }
+      }
+    }
+
+    if (!ffprobePath || !fs.existsSync(ffprobePath)) {
+      console.warn("[Probe] ffprobe static binary path could not be resolved or file is missing.");
       return resolve({ dvProfile: null, audioCodec: null });
     }
 

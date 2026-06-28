@@ -149,7 +149,7 @@ export class DriveSyncService {
 
     console.log(`[Sync] Preparing catalog payload and performing ffprobe metadata checks...`);
     const upsertPayload: Database["public"]["Tables"]["media_library"]["Insert"][] = [];
-    const MAX_PROBES = 50; // Cap probes per sync to prevent timeouts and API rate limits
+    const MAX_PROBES = 200; // Cap probes per sync to prevent timeouts and API rate limits
     let probesRun = 0;
 
     for (const file of qualifyingVideos) {
