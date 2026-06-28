@@ -2,6 +2,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 
 export default function Home() {
+  // Rebuild trigger for deployment verification
   return (
     <PageContainer
       title="Home"
