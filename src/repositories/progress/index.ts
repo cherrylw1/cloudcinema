@@ -1,12 +1,15 @@
 export interface UserProgress {
-  userId: string;
+  id: string;
+  profileId: string;
   mediaId: string;
-  lastPositionSeconds: number;
+  playbackPosition: number;
+  completed: boolean;
+  lastWatched: string;
+  createdAt: string;
   updatedAt: string;
-  isCompleted: boolean;
 }
 
 export interface ProgressRepository {
-  getProgress(userId: string, mediaId: string): Promise<UserProgress | null>;
-  saveProgress(progress: Omit<UserProgress, "updatedAt">): Promise<void>;
+  getProgress(profileId: string, mediaId: string): Promise<UserProgress | null>;
+  saveProgress(progress: Omit<UserProgress, "id" | "lastWatched" | "createdAt" | "updatedAt">): Promise<void>;
 }

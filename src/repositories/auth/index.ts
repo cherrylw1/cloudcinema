@@ -2,6 +2,8 @@ export interface User {
   id: string;
   email: string;
   createdAt: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface Session {

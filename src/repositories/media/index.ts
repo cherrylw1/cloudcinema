@@ -1,12 +1,17 @@
 export interface Media {
   id: string;
+  driveFileId: string;
   title: string;
-  type: "movie" | "tv-show" | "anime";
-  description?: string;
-  thumbnailUrl?: string;
-  videoUrl?: string;
-  duration?: number;
+  series?: string | null;
+  season?: number | null;
+  episode?: number | null;
+  mediaType: "movie" | "tv-show" | "anime";
+  posterUrl?: string | null;
+  backdropUrl?: string | null;
+  runtime?: number | null;
+  fileSize?: number | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface MediaRepository {
