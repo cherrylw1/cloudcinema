@@ -161,7 +161,7 @@ async function processSingleMedia(
   // 1. Probe the source file
   console.log(`[Shard ${shardIndex}] Probing file streams for ${title}...`);
   const ffprobeOutput = execSync(
-    `ffprobe -v quiet -print_format json -show_streams -headers "Authorization: Bearer ${accessToken}\r\n" "${sourceUrl}"`,
+    `ffprobe -v quiet -print_format json -show_streams -show_format -headers "Authorization: Bearer ${accessToken}\r\n" "${sourceUrl}"`,
     { encoding: "utf8" }
   );
   const parsedProbe = JSON.parse(ffprobeOutput);
@@ -238,6 +238,38 @@ async function processSingleMedia(
       console.warn(`[Shard ${shardIndex}] Failed single-pass subtitle extraction:`, err);
     }
     console.timeEnd(`[Shard ${shardIndex}] Subtitle Extraction Phase`);
+  }
+
+  // Check if file is already web-compatible (H.264 video, AAC/MP3/Opus audio, no Dolby Vision, MP4 container)
+  const isMp4 = parsedProbe.format?.format_name?.split(",").includes("mp4") || false;
+  const isCompatibleVideo = videoStream.codec_name === "h264";
+  const isCompatibleAudio = audioTracks.length > 0 && 
+    ["aac", "mp3", "opus"].includes(audioTracks[0].codec?.toLowerCase());
+  
+  const isCompatible = (dvProfile === null) && isCompatibleVideo && isCompatibleAudio && isMp4;
+
+  if (isCompatible) {
+    console.log(`[Shard ${shardIndex}] Media ${title} is already fully web-compatible. Bypassing transcode.`);
+    
+    const audioVariants: AudioVariant[] = [
+      { language: audioTracks[0]?.language || "default", driveFileId: sourceFileId },
+    ];
+    
+    const { error: updateError } = await supabase
+      .from("media_library")
+      .update({
+        processed_drive_file_id: sourceFileId,
+        processing_status: "ready",
+        audio_codec: audioTracks[0].codec,
+        mime_type: "video/mp4",
+        audio_variants: audioVariants as any,
+        subtitle_tracks: subtitleTracks as any,
+      })
+      .eq("id", mediaId);
+
+    if (updateError) throw updateError;
+    console.log(`[Shard ${shardIndex}] Successfully marked ${title} as ready.`);
+    return;
   }
 
   // 3. Single-pass transcode: transcode video and transcode ALL audio tracks to separate local files in one read
