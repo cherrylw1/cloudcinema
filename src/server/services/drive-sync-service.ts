@@ -147,10 +147,12 @@ export class DriveSyncService {
       throw new Error("[Sync] Failed to retrieve Google Drive OAuth access token for probing.");
     }
 
-    console.log(`[Sync] Preparing catalog payload and performing ffprobe metadata checks...`);
-    const upsertPayload: Database["public"]["Tables"]["media_library"]["Insert"][] = [];
-    const MAX_PROBES = 200; // Cap probes per sync to prevent timeouts and API rate limits
-    let probesRun = 0;
+    console.log(`[Sync] Preparing catalog payload...`);
+
+    // Phase 1: Build full payload and identify which files need probing
+    type PayloadRow = Database["public"]["Tables"]["media_library"]["Insert"];
+    const upsertPayload: PayloadRow[] = [];
+    const filesToProbe: Array<{ fileId: string; payloadIndex: number }> = [];
 
     for (const file of qualifyingVideos) {
       if (!file.id) continue;
@@ -179,57 +181,60 @@ export class DriveSyncService {
 
       const fileSize = file.size ? parseInt(file.size, 10) : null;
       const isExisting = existingFileIdsSet.has(file.id);
-
-      let dvProfile: number | null = null;
-      let audioCodec: string | null = null;
+      const meta = existingFileMetadataMap.get(file.id);
 
       if (isExisting) {
         summary.updated++;
-        const meta = existingFileMetadataMap.get(file.id);
-        
-        // If metadata is already present in DB, use it and avoid re-probing
-        if (meta && (meta.dv_profile !== null || meta.audio_codec !== null)) {
-          dvProfile = meta.dv_profile;
-          audioCodec = meta.audio_codec;
-        } else if (probesRun < MAX_PROBES) {
-          // Missing metadata, run probe
-          try {
-            const probeResult = await probeMetadata(file.id, accessToken);
-            dvProfile = probeResult.dvProfile;
-            audioCodec = probeResult.audioCodec;
-            probesRun++;
-          } catch (err) {
-            console.error(`[Sync] Failed to probe existing file ${file.id}:`, err);
-          }
-        }
       } else {
         summary.added++;
-        if (probesRun < MAX_PROBES) {
-          // New file, run probe
-          try {
-            const probeResult = await probeMetadata(file.id, accessToken);
-            dvProfile = probeResult.dvProfile;
-            audioCodec = probeResult.audioCodec;
-            probesRun++;
-          } catch (err) {
-            console.error(`[Sync] Failed to probe new file ${file.id}:`, err);
-          }
-        }
       }
 
+      // Use cached metadata if already probed; otherwise queue for probing
+      let dvProfile: number | null = null;
+      let audioCodec: string | null = null;
+      const alreadyProbed = meta && (meta.audio_codec !== null || meta.dv_profile !== null);
+      if (alreadyProbed) {
+        dvProfile = meta!.dv_profile;
+        audioCodec = meta!.audio_codec;
+      }
+
+      const payloadIndex = upsertPayload.length;
       upsertPayload.push({
         drive_file_id: file.id,
-        title: title,
-        series: series,
-        season: season,
-        episode: episode,
+        title,
+        series,
+        season,
+        episode,
         media_type: mediaType,
         file_size: fileSize,
         mime_type: file.mimeType || null,
         dv_profile: dvProfile,
         audio_codec: audioCodec,
       });
+
+      if (!alreadyProbed) {
+        filesToProbe.push({ fileId: file.id, payloadIndex });
+      }
     }
+
+    // Phase 2: Run all outstanding probes concurrently in batches of 10
+    const PROBE_CONCURRENCY = 10;
+    console.log(`[Sync] Probing ${filesToProbe.length} files for metadata (concurrency=${PROBE_CONCURRENCY})...`);
+    for (let i = 0; i < filesToProbe.length; i += PROBE_CONCURRENCY) {
+      const batch = filesToProbe.slice(i, i + PROBE_CONCURRENCY);
+      await Promise.all(
+        batch.map(async ({ fileId, payloadIndex }) => {
+          try {
+            const result = await probeMetadata(fileId, accessToken);
+            upsertPayload[payloadIndex].dv_profile = result.dvProfile;
+            upsertPayload[payloadIndex].audio_codec = result.audioCodec;
+          } catch (err) {
+            console.error(`[Sync] Probe failed for ${fileId}:`, err);
+          }
+        })
+      );
+    }
+    console.log(`[Sync] Probe phase complete. ${filesToProbe.length} files processed.`);
 
     console.log(`[Sync] Upserting ${upsertPayload.length} media records in batches of 100...`);
     const upsertChunkSize = 100;
