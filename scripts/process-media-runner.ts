@@ -73,6 +73,10 @@ async function main() {
   const title = media.title;
   console.log(`[Processor] Source Drive File ID: ${sourceFileId}, Title: ${title}`);
 
+  console.log(`[Debug] GOOGLE_CLIENT_ID length: ${googleClientId.length}, has whitespace: ${googleClientId !== googleClientId.trim()}`);
+  console.log(`[Debug] GOOGLE_CLIENT_SECRET length: ${googleClientSecret.length}, has whitespace: ${googleClientSecret !== googleClientSecret.trim()}`);
+  console.log(`[Debug] GOOGLE_REFRESH_TOKEN length: ${googleRefreshToken.length}, has whitespace: ${googleRefreshToken !== googleRefreshToken.trim()}`);
+
   // Setup Google Drive Client
   const oauth2Client = new google.auth.OAuth2(
     googleClientId,
