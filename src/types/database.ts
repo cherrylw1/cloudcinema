@@ -49,6 +49,7 @@ export interface Database {
           runtime: number | null
           file_size: number | null
           tmdb_id: number | null
+          mime_type: string | null
           created_at: string
           updated_at: string
         }
@@ -65,6 +66,7 @@ export interface Database {
           runtime?: number | null
           file_size?: number | null
           tmdb_id?: number | null
+          mime_type?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -81,6 +83,7 @@ export interface Database {
           runtime?: number | null
           file_size?: number | null
           tmdb_id?: number | null
+          mime_type?: string | null
           created_at?: string
           updated_at?: string
         }

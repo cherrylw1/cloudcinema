@@ -177,6 +177,7 @@ export class DriveSyncService {
         episode: episode,
         media_type: mediaType,
         file_size: fileSize,
+        mime_type: file.mimeType || null,
       });
     }
 

@@ -52,6 +52,7 @@ export class SupabaseMediaRepository implements MediaRepository {
       runtime: row.runtime,
       fileSize: row.file_size,
       tmdbId: row.tmdb_id,
+      mimeType: row.mime_type,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -84,6 +85,7 @@ export class SupabaseMediaRepository implements MediaRepository {
       runtime: data.runtime,
       fileSize: data.file_size,
       tmdbId: data.tmdb_id,
+      mimeType: data.mime_type,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };

@@ -11,6 +11,7 @@ export interface Media {
   runtime?: number | null;
   fileSize?: number | null;
   tmdbId?: number | null;
+  mimeType?: string | null;
   createdAt: string;
   updatedAt: string;
 }

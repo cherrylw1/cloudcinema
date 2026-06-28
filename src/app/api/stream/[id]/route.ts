@@ -35,10 +35,10 @@ export async function GET(
     return NextResponse.json({ error: "Approval pending." }, { status: 403 });
   }
 
-  // 4. Fetch the Drive file ID from the media library database
+  // 4. Fetch the Drive file ID and metadata from the media library database
   const { data: media, error: dbError } = await supabase
     .from("media_library")
-    .select("drive_file_id")
+    .select("drive_file_id, mime_type, file_size")
     .eq("id", id)
     .maybeSingle();
 
@@ -47,6 +47,8 @@ export async function GET(
   }
 
   const fileId = media.drive_file_id;
+  const mimeType = media.mime_type || "video/mp4";
+  const fileSize = media.file_size;
 
   try {
     // 5. Initialize the Google Drive Client
@@ -62,115 +64,84 @@ export async function GET(
 
     const drive = google.drive({ version: "v3", auth: oauth2Client });
 
-    // 6. Retrieve metadata (size and MIME type) from Google Drive
-    const metaRes = await drive.files.get({
-      fileId,
-      fields: "mimeType,size",
-    });
+    // 6. Define fixed chunk size cap: 8MB
+    const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB
 
-    const mimeType = metaRes.data.mimeType || "video/mp4";
-    const fileSizeString = metaRes.data.size;
-    const fileSize = fileSizeString ? parseInt(fileSizeString, 10) : null;
-
-    // 7. Parse Range header if present
+    // 7. Parse the Range header and clamp the chunk size bounds
     const rangeHeader = request.headers.get("range");
 
+    let start = 0;
+    let end = fileSize ? fileSize - 1 : CHUNK_SIZE - 1;
+
     if (rangeHeader && fileSize) {
-      // Expected Format: bytes=start-end
       const parts = rangeHeader.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-
-      // Validate range constraints
-      if (start >= fileSize || end >= fileSize || start > end) {
-        return new Response("Requested range not satisfiable", {
-          status: 416,
-          headers: {
-            "Content-Range": `bytes */${fileSize}`,
-          },
-        });
+      start = parseInt(parts[0], 10);
+      
+      if (parts[1]) {
+        end = parseInt(parts[1], 10);
+      } else {
+        end = Math.min(start + CHUNK_SIZE - 1, fileSize - 1);
       }
+    } else if (fileSize) {
+      start = 0;
+      end = Math.min(CHUNK_SIZE - 1, fileSize - 1);
+    }
 
-      const contentLength = end - start + 1;
-
-      // 8. Fetch byte chunk stream from Google Drive
-      const driveStreamRes = await drive.files.get(
-        {
-          fileId,
-          alt: "media",
-        },
-        {
-          headers: {
-            Range: `bytes=${start}-${end}`,
-          },
-          responseType: "stream",
-        }
-      );
-
-      const stream = driveStreamRes.data as unknown as Readable;
-
-      // Convert standard Node stream to web stream for Next.js response context
-      const webStream = new ReadableStream({
-        start(controller) {
-          stream.on("data", (chunk) => controller.enqueue(chunk));
-          stream.on("end", () => controller.close());
-          stream.on("error", (err) => controller.error(err));
-        },
-        cancel() {
-          stream.destroy();
-        }
-      });
-
-      return new Response(webStream, {
-        status: 206,
+    // Validate range bounds
+    if (fileSize && (start >= fileSize || end >= fileSize || start > end)) {
+      return new Response("Requested range not satisfiable", {
+        status: 416,
         headers: {
-          "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-          "Accept-Ranges": "bytes",
-          "Content-Length": contentLength.toString(),
-          "Content-Type": mimeType,
-          "Cache-Control": "public, max-age=3600",
+          "Content-Range": `bytes */${fileSize}`,
         },
-      });
-    } else {
-      // 9. Fetch the full file stream if no Range header is supplied
-      const driveStreamRes = await drive.files.get(
-        {
-          fileId,
-          alt: "media",
-        },
-        {
-          responseType: "stream",
-        }
-      );
-
-      const stream = driveStreamRes.data as unknown as Readable;
-
-      const webStream = new ReadableStream({
-        start(controller) {
-          stream.on("data", (chunk) => controller.enqueue(chunk));
-          stream.on("end", () => controller.close());
-          stream.on("error", (err) => controller.error(err));
-        },
-        cancel() {
-          stream.destroy();
-        }
-      });
-
-      const responseHeaders: Record<string, string> = {
-        "Content-Type": mimeType,
-        "Accept-Ranges": "bytes",
-        "Cache-Control": "public, max-age=3600",
-      };
-
-      if (fileSize) {
-        responseHeaders["Content-Length"] = fileSize.toString();
-      }
-
-      return new Response(webStream, {
-        status: 200,
-        headers: responseHeaders,
       });
     }
+
+    const contentLength = end - start + 1;
+
+    // 8. Fetch byte chunk stream from Google Drive
+    const driveStreamRes = await drive.files.get(
+      {
+        fileId,
+        alt: "media",
+      },
+      {
+        headers: {
+          Range: `bytes=${start}-${end}`,
+        },
+        responseType: "stream",
+      }
+    );
+
+    const stream = driveStreamRes.data as unknown as Readable;
+
+    // Convert standard Node stream to web stream for Next.js response context
+    const webStream = new ReadableStream({
+      start(controller) {
+        stream.on("data", (chunk) => controller.enqueue(chunk));
+        stream.on("end", () => controller.close());
+        stream.on("error", (err) => controller.error(err));
+      },
+      cancel() {
+        stream.destroy();
+      }
+    });
+
+    const responseHeaders: Record<string, string> = {
+      "Accept-Ranges": "bytes",
+      "Content-Length": contentLength.toString(),
+      "Content-Type": mimeType,
+      "Cache-Control": "public, max-age=3600",
+    };
+
+    if (fileSize) {
+      responseHeaders["Content-Range"] = `bytes ${start}-${end}/${fileSize}`;
+    }
+
+    return new Response(webStream, {
+      status: 206,
+      headers: responseHeaders,
+    });
   } catch (err) {
     console.error(`[Streaming Proxy] Failed to stream file ${fileId}:`, err);
     return NextResponse.json({ error: "Failed to initialize stream." }, { status: 500 });
