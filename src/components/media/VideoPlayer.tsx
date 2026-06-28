@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Media } from "@/repositories/media";
 import type { UserProgress } from "@/repositories/progress";
 import { saveProgressAction } from "@/server/actions/progress-actions";
@@ -14,6 +14,24 @@ export function VideoPlayer({ media, initialProgress }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const initialSeekDone = useRef(false);
   const lastSavedTime = useRef<number>(0);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+
+  // Determine browser capability and select stream route on mount
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const video = document.createElement("video");
+    const mime = media.mimeType || "video/mp4";
+    const canPlay = video.canPlayType(mime);
+
+    if (canPlay === "probably" || canPlay === "maybe") {
+      setStreamUrl(`/api/stream/${media.id}`);
+      console.log(`[VideoPlayer] Browser supports direct playback for ${mime}. Routing to: /api/stream/${media.id}`);
+    } else {
+      setStreamUrl(`/api/stream-remux/${media.id}`);
+      console.log(`[VideoPlayer] Browser does not support ${mime}. Routing to remuxer: /api/stream-remux/${media.id}`);
+    }
+  }, [media.id, media.mimeType]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Auto-seek to starting playback position when video metadata is loaded
   const handleLoadedMetadata = () => {
@@ -73,13 +91,21 @@ export function VideoPlayer({ media, initialProgress }: VideoPlayerProps) {
     };
   }, [media.id]);
 
+  if (!streamUrl) {
+    return (
+      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black flex items-center justify-center border border-border/40 shadow-2xl">
+        <div className="text-xs text-foreground/40 animate-pulse">Initializing video stream...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black border border-border/40 shadow-2xl">
       <video
         ref={videoRef}
         controls
         autoPlay
-        src={`/api/stream/${media.id}`}
+        src={streamUrl}
         onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
