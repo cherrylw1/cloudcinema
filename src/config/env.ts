@@ -8,7 +8,7 @@ const getEnv = (key: string, defaultValue?: string, required = false): string =>
   if (required && !value) {
     throw new Error(`[Env Validation] Required environment variable "${key}" is missing.`);
   }
-  return value || "";
+  return (value || "").trim();
 };
 
 const validateUrl = (url: string): string => {
@@ -21,10 +21,10 @@ const validateUrl = (url: string): string => {
 };
 
 // Directly reference NEXT_PUBLIC_ variables as literals for build-time compilation support in browser bundles
-const rawAppName = process.env.NEXT_PUBLIC_APP_NAME || "CloudCinema";
-const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const rawSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const rawAppName = (process.env.NEXT_PUBLIC_APP_NAME || "CloudCinema").trim();
+const rawAppUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").trim();
+const rawSupabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+const rawSupabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
 
 export const env = {
   // Required
