@@ -8,6 +8,7 @@ import ffprobeStatic from "ffprobe-static";
 export interface ProbeResult {
   dvProfile: number | null;
   audioCodec: string | null;
+  videoCodec: string | null;
 }
 
 /**
@@ -20,7 +21,7 @@ export function probeMetadata(fileId: string, accessToken: string): Promise<Prob
 
     if (!ffprobePath) {
       console.warn("[Probe] ffprobe-static did not return a binary path.");
-      return resolve({ dvProfile: null, audioCodec: null });
+      return resolve({ dvProfile: null, audioCodec: null, videoCodec: null });
     }
 
     // Ensure the binary is executable (needed on Vercel/Linux after npm install)
@@ -52,7 +53,7 @@ export function probeMetadata(fileId: string, accessToken: string): Promise<Prob
     ffprobeProcess.on("close", (code) => {
       if (code !== 0) {
         console.warn(`[Probe] ffprobe exited with code ${code} for file ${fileId}`);
-        return resolve({ dvProfile: null, audioCodec: null });
+        return resolve({ dvProfile: null, audioCodec: null, videoCodec: null });
       }
 
       try {
@@ -64,6 +65,7 @@ export function probeMetadata(fileId: string, accessToken: string): Promise<Prob
         const audioStream = streams.find((s: any) => s.codec_type === "audio");
 
         const audioCodec = audioStream ? audioStream.codec_name : null;
+        const videoCodec = videoStream ? videoStream.codec_name : null;
 
         // Parse Dolby Vision Configuration Record if present in video side data list
         const doviRecord = videoStream?.side_data_list?.find(
@@ -71,17 +73,17 @@ export function probeMetadata(fileId: string, accessToken: string): Promise<Prob
         );
         const dvProfile = doviRecord ? parseInt(doviRecord.dv_profile, 10) : null;
 
-        console.log(`[Probe] Success for file ${fileId}: Profile ${dvProfile}, Audio ${audioCodec}`);
-        resolve({ dvProfile, audioCodec });
+        console.log(`[Probe] Success for file ${fileId}: videoCodec=${videoCodec}, Profile ${dvProfile}, Audio ${audioCodec}`);
+        resolve({ dvProfile, audioCodec, videoCodec });
       } catch (err) {
         console.error(`[Probe] Failed to parse ffprobe stdout for ${fileId}:`, err);
-        resolve({ dvProfile: null, audioCodec: null });
+        resolve({ dvProfile: null, audioCodec: null, videoCodec: null });
       }
     });
 
     ffprobeProcess.on("error", (err) => {
       console.error(`[Probe] Failed to execute ffprobe for ${fileId}:`, err);
-      resolve({ dvProfile: null, audioCodec: null });
+      resolve({ dvProfile: null, audioCodec: null, videoCodec: null });
     });
   });
 }

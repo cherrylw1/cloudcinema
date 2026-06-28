@@ -7,6 +7,7 @@ import ffmpegPath from "ffmpeg-static";
 import { Readable } from "stream";
 import path from "path";
 import fs from "fs";
+import { probeMetadata } from "@/server/services/metadata-probe-service";
 
 export const dynamic = "force-dynamic";
 
@@ -103,14 +104,40 @@ export async function GET(
       }
     }
 
-    // Determine transcoding requirements
-    const browserDecodableAudioCodecs = ["aac", "mp3", "opus", "vorbis", "flac"];
-    const isAudioUnsupported = audioCodec && !browserDecodableAudioCodecs.includes(audioCodec.toLowerCase());
+    // Determine transcoding requirements:
+    // If DB metadata is missing, probe the file on-the-fly to get codec info.
+    // This adds ~1-2s on first play, but ensures the correct pipeline is always used.
+    let effectiveAudioCodec = audioCodec;
+    let effectiveVideoCodec: string | null = null;
+    let effectiveDvProfile = dvProfile;
 
-    const shouldStripDovi = (dvProfile === 7 || dvProfile === 8) && !isWindows && doviToolExists;
+    if (audioCodec === null) {
+      console.log(`[Remux] DB metadata missing for ${fileId}, probing on-the-fly...`);
+      try {
+        const probe = await probeMetadata(fileId, accessToken);
+        effectiveAudioCodec = probe.audioCodec;
+        effectiveVideoCodec = probe.videoCodec;
+        effectiveDvProfile = probe.dvProfile;
+        console.log(`[Remux] Probe: video=${effectiveVideoCodec}, audio=${effectiveAudioCodec}, dv=${effectiveDvProfile}`);
+      } catch (err) {
+        console.warn(`[Remux] On-the-fly probe failed, proceeding with defaults:`, err);
+      }
+    }
 
-    if (dvProfile === 5) {
-      console.log(`[Remux] Detected Dolby Vision Profile 5 for file ${fileId}. Passing through color layer unchanged.`);
+    // For HEVC: ALWAYS run through dovi_tool regardless of detected dvProfile.
+    // dovi_tool safely strips DV RPU NAL units if present; it's a no-op on clean HEVC.
+    // This handles DV files where ffprobe cannot detect the profile via side_data_list.
+    const isHevc = effectiveVideoCodec === "hevc" || dvProfile !== null;
+    const shouldStripDovi = isHevc && !isWindows && doviToolExists;
+
+    // Always transcode audio to AAC for guaranteed browser compatibility.
+    // AAC is universally supported; this handles TrueHD, EAC3, DTS, and any other format.
+    const isAudioUnsupported = effectiveAudioCodec
+      ? !["aac", "mp3", "opus", "vorbis"].includes(effectiveAudioCodec.toLowerCase())
+      : true; // If unknown, assume unsupported and transcode to be safe
+
+    if (effectiveDvProfile === 5) {
+      console.log(`[Remux] Dolby Vision Profile 5 detected for ${fileId}. Color tint is expected — unfixable without GPU transcoding.`);
     }
 
     let webStream: ReadableStream;
