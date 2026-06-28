@@ -2,6 +2,8 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { SupabaseMediaRepository } from "@/repositories/media/supabase-media-repository";
 import { PaginatedMediaGrid } from "@/components/media/PaginatedMediaGrid";
 
+export const dynamic = "force-dynamic";
+
 export default async function SearchPage({
   searchParams,
 }: {
