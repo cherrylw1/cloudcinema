@@ -1,17 +1,25 @@
 import { PageContainer } from "@/components/layout/PageContainer";
-import { GlassPanel } from "@/components/ui/GlassPanel";
+import { PaginatedMediaGrid } from "@/components/media/PaginatedMediaGrid";
+import { SupabaseMediaRepository } from "@/repositories/media/supabase-media-repository";
 
-export default function MoviesPage() {
+export default async function MoviesPage() {
+  const repository = new SupabaseMediaRepository();
+  const initialMedia = await repository.getMediaList({
+    type: "movie",
+    limit: 60,
+    offset: 0,
+  });
+
   return (
     <PageContainer
       title="Movies"
       description="Browse your personal collection of motion pictures."
     >
-      <GlassPanel>
-        <p className="text-sm text-foreground/75 leading-relaxed">
-          No movies indexed. Add video files to your linked source folders to watch them here.
-        </p>
-      </GlassPanel>
+      <PaginatedMediaGrid
+        initialMedia={initialMedia}
+        type="movie"
+        emptyStateMessage="No movies indexed. Add video files to your linked source folders to watch them here."
+      />
     </PageContainer>
   );
 }

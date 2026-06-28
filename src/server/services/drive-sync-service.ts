@@ -1,6 +1,7 @@
-import { google } from "googleapis";
+import { google, drive_v3 } from "googleapis";
 import { env } from "@/config/env";
 import { createAdminClient } from "@/clients/supabase/admin";
+import type { Database } from "@/types/database";
 
 interface SyncSummary {
   scanned: number;    // Total elements processed (folders + files)
@@ -37,7 +38,7 @@ export class DriveSyncService {
     let startFolderId = rootFolderId;
     if (rootFolderId === "root") {
       try {
-        const rootMeta: any = await this.drive.files.get({ fileId: "root", fields: "id" });
+        const rootMeta = (await this.drive.files.get({ fileId: "root", fields: "id" })) as unknown as { data: drive_v3.Schema$File };
         if (rootMeta.data.id) {
           startFolderId = rootMeta.data.id;
           console.log(`[Sync] Resolved root alias to true ID: ${startFolderId}`);
@@ -48,16 +49,16 @@ export class DriveSyncService {
     }
 
     console.log(`[Sync] Fetching file catalog list from Google Drive...`);
-    const allFiles: any[] = [];
+    const allFiles: drive_v3.Schema$File[] = [];
     let pageToken: string | undefined = undefined;
 
     do {
-      const response: any = await this.drive.files.list({
+      const response = (await this.drive.files.list({
         q: "trashed = false",
         fields: "nextPageToken, files(id, name, mimeType, size, parents)",
         pageSize: 1000,
         pageToken: pageToken,
-      });
+      })) as unknown as { data: { files?: drive_v3.Schema$File[]; nextPageToken?: string | null } };
 
       const files = response.data.files || [];
       allFiles.push(...files);
@@ -66,7 +67,7 @@ export class DriveSyncService {
     } while (pageToken);
 
     console.log(`[Sync] Building parent-child folder tree in memory...`);
-    const folderChildrenMap = new Map<string, any[]>();
+    const folderChildrenMap = new Map<string, drive_v3.Schema$File[]>();
 
     for (const file of allFiles) {
       if (!file.id) continue;
@@ -81,7 +82,7 @@ export class DriveSyncService {
 
     console.log(`[Sync] Performing depth-first traversal from: ${startFolderId}`);
     const visitedFolders = new Set<string>();
-    const qualifyingVideos: any[] = [];
+    const qualifyingVideos: drive_v3.Schema$File[] = [];
 
     const traverse = (folderId: string) => {
       if (visitedFolders.has(folderId)) return;
@@ -90,9 +91,9 @@ export class DriveSyncService {
 
       const children = folderChildrenMap.get(folderId) || [];
       for (const child of children) {
-        if (child.mimeType === "application/vnd.google-apps.folder") {
+        if (child.mimeType === "application/vnd.google-apps.folder" && child.id) {
           traverse(child.id);
-        } else if (child.mimeType.startsWith("video/")) {
+        } else if (child.mimeType && child.mimeType.startsWith("video/")) {
           summary.videos++;
           qualifyingVideos.push(child);
         } else {
@@ -132,10 +133,11 @@ export class DriveSyncService {
     }
 
     console.log(`[Sync] Preparing catalog payload...`);
-    const upsertPayload: any[] = [];
+    const upsertPayload: Database["public"]["Tables"]["media_library"]["Insert"][] = [];
 
     for (const file of qualifyingVideos) {
-      const name = file.name;
+      if (!file.id) continue;
+      const name = file.name || "Untitled File";
       const extensionIndex = name.lastIndexOf(".");
       const title = extensionIndex !== -1 ? name.substring(0, extensionIndex) : name;
 

@@ -1,17 +1,25 @@
 import { PageContainer } from "@/components/layout/PageContainer";
-import { GlassPanel } from "@/components/ui/GlassPanel";
+import { PaginatedMediaGrid } from "@/components/media/PaginatedMediaGrid";
+import { SupabaseMediaRepository } from "@/repositories/media/supabase-media-repository";
 
-export default function AnimePage() {
+export default async function AnimePage() {
+  const repository = new SupabaseMediaRepository();
+  const initialMedia = await repository.getMediaList({
+    type: "anime",
+    limit: 60,
+    offset: 0,
+  });
+
   return (
     <PageContainer
       title="Anime"
       description="Browse your indexed anime collections and series."
     >
-      <GlassPanel>
-        <p className="text-sm text-foreground/75 leading-relaxed">
-          No anime collections indexed. Group your anime titles with metadata resolvers to view them here.
-        </p>
-      </GlassPanel>
+      <PaginatedMediaGrid
+        initialMedia={initialMedia}
+        type="anime"
+        emptyStateMessage="No anime collections indexed. Group your anime titles with metadata resolvers to view them here."
+      />
     </PageContainer>
   );
 }

@@ -15,6 +15,10 @@ export interface Media {
 }
 
 export interface MediaRepository {
-  getMediaList(type?: "movie" | "tv-show" | "anime"): Promise<Media[]>;
+  getMediaList(options?: {
+    type?: "movie" | "tv-show" | "anime";
+    limit?: number;
+    offset?: number;
+  }): Promise<Media[]>;
   getMediaById(id: string): Promise<Media | null>;
 }
