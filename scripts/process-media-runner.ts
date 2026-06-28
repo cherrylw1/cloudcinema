@@ -23,7 +23,7 @@ async function main() {
   }
 
   // Load and validate environment variables
-  const rawSupabaseUrl = process.env.SUPABASE_URL;
+  const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const rawSupabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const rawGoogleClientId = process.env.GOOGLE_CLIENT_ID;
   const rawGoogleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -31,7 +31,7 @@ async function main() {
   const rawGoogleDriveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
   const required = {
-    SUPABASE_URL: rawSupabaseUrl,
+    NEXT_PUBLIC_SUPABASE_URL: rawSupabaseUrl,
     SUPABASE_SERVICE_ROLE_KEY: rawSupabaseKey,
     GOOGLE_CLIENT_ID: rawGoogleClientId,
     GOOGLE_CLIENT_SECRET: rawGoogleClientSecret,
