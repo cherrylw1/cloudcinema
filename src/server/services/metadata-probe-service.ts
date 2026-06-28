@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { spawn } from "child_process";
-import path from "path";
 import fs from "fs";
+// ffprobe-static is a proper npm package — Vercel bundles it correctly,
+// including the platform-appropriate binary inside node_modules.
+import ffprobeStatic from "ffprobe-static";
 
 export interface ProbeResult {
   dvProfile: number | null;
@@ -14,29 +16,20 @@ export interface ProbeResult {
  */
 export function probeMetadata(fileId: string, accessToken: string): Promise<ProbeResult> {
   return new Promise((resolve) => {
-    let ffprobePath = path.join(process.cwd(), "src/bin/ffprobe");
-    const isWindows = process.platform === "win32";
+    const ffprobePath = ffprobeStatic.path;
 
-    if (isWindows) {
-      try {
-        const ffprobeStatic = eval("require")("ffprobe-static");
-        ffprobePath = ffprobeStatic.path;
-      } catch (err) {
-        console.warn("[Probe] Failed to resolve ffprobe-static locally on Windows:", err);
-      }
-    } else {
-      if (fs.existsSync(ffprobePath)) {
-        try {
-          fs.chmodSync(ffprobePath, "755");
-        } catch (err) {
-          console.warn("[Probe] Failed to set permissions on ffprobe binary:", err);
-        }
-      }
+    if (!ffprobePath) {
+      console.warn("[Probe] ffprobe-static did not return a binary path.");
+      return resolve({ dvProfile: null, audioCodec: null });
     }
 
-    if (!ffprobePath || !fs.existsSync(ffprobePath)) {
-      console.warn("[Probe] ffprobe static binary path could not be resolved or file is missing.");
-      return resolve({ dvProfile: null, audioCodec: null });
+    // Ensure the binary is executable (needed on Vercel/Linux after npm install)
+    if (process.platform !== "win32" && fs.existsSync(ffprobePath)) {
+      try {
+        fs.chmodSync(ffprobePath, "755");
+      } catch {
+        // Non-fatal — chmod may fail in read-only FS; spawn will still try
+      }
     }
 
     // Direct stream link to download the file Alt Media from Google Drive API v3
