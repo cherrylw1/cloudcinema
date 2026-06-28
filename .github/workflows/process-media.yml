@@ -29,8 +29,6 @@ jobs:
           sudo mv dovi_tool /usr/local/bin/
           rm dovi_tool-2.3.2-x86_64-unknown-linux-musl.tar.gz
           dovi_tool --version
-          # Run remove help to confirm argument syntax
-          dovi_tool remove --help
 
 
       - name: Setup Node.js

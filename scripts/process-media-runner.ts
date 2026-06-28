@@ -23,12 +23,12 @@ async function main() {
   }
 
   // Load and validate environment variables
-  const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const rawSupabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const rawGoogleClientId = process.env.GOOGLE_CLIENT_ID;
-  const rawGoogleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const rawGoogleRefreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-  const rawGoogleDriveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const rawSupabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const rawGoogleClientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const rawGoogleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+  const rawGoogleRefreshToken = process.env.GOOGLE_REFRESH_TOKEN?.trim();
+  const rawGoogleDriveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID?.trim();
 
   const required = {
     NEXT_PUBLIC_SUPABASE_URL: rawSupabaseUrl,
@@ -73,9 +73,6 @@ async function main() {
   const title = media.title;
   console.log(`[Processor] Source Drive File ID: ${sourceFileId}, Title: ${title}`);
 
-  console.log(`[Debug] GOOGLE_CLIENT_ID length: ${googleClientId.length}, has whitespace: ${googleClientId !== googleClientId.trim()}`);
-  console.log(`[Debug] GOOGLE_CLIENT_SECRET length: ${googleClientSecret.length}, has whitespace: ${googleClientSecret !== googleClientSecret.trim()}`);
-  console.log(`[Debug] GOOGLE_REFRESH_TOKEN length: ${googleRefreshToken.length}, has whitespace: ${googleRefreshToken !== googleRefreshToken.trim()}`);
 
   // Setup Google Drive Client
   const oauth2Client = new google.auth.OAuth2(
