@@ -23,22 +23,38 @@ async function main() {
   }
 
   // Load and validate environment variables
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const googleClientId = process.env.GOOGLE_CLIENT_ID;
-  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const googleRefreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-  const googleDriveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  const rawSupabaseUrl = process.env.SUPABASE_URL;
+  const rawSupabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const rawGoogleClientId = process.env.GOOGLE_CLIENT_ID;
+  const rawGoogleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const rawGoogleRefreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  const rawGoogleDriveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
-  if (!supabaseUrl || !supabaseKey || !googleClientId || !googleClientSecret || !googleRefreshToken || !googleDriveFolderId) {
-    console.error("Error: Missing required environment variables.");
+  const required = {
+    SUPABASE_URL: rawSupabaseUrl,
+    SUPABASE_SERVICE_ROLE_KEY: rawSupabaseKey,
+    GOOGLE_CLIENT_ID: rawGoogleClientId,
+    GOOGLE_CLIENT_SECRET: rawGoogleClientSecret,
+    GOOGLE_REFRESH_TOKEN: rawGoogleRefreshToken,
+    GOOGLE_DRIVE_FOLDER_ID: rawGoogleDriveFolderId
+  };
+  const missing = Object.entries(required).filter(([, v]) => !v).map(([k]) => k);
+  if (missing.length > 0) {
+    console.error(`Error: Missing required environment variables: ${missing.join(", ")}`);
     process.exit(1);
   }
+
+  const supabaseUrl = rawSupabaseUrl as string;
+  const supabaseKey = rawSupabaseKey as string;
+  const googleClientId = rawGoogleClientId as string;
+  const googleClientSecret = rawGoogleClientSecret as string;
+  const googleRefreshToken = rawGoogleRefreshToken as string;
+  const googleDriveFolderId = rawGoogleDriveFolderId as string;
 
   console.log(`[Processor] Initializing for Media ID: ${mediaId}`);
 
   // Connect to Supabase
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = createClient(supabaseUrl as string, supabaseKey as string);
 
   // Update status to processing
   const { data: media, error: fetchError } = await supabase
