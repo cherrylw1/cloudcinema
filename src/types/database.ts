@@ -48,6 +48,7 @@ export interface Database {
           backdrop_url: string | null
           runtime: number | null
           file_size: number | null
+          tmdb_id: number | null
           created_at: string
           updated_at: string
         }
@@ -63,6 +64,7 @@ export interface Database {
           backdrop_url?: string | null
           runtime?: number | null
           file_size?: number | null
+          tmdb_id?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -78,6 +80,7 @@ export interface Database {
           backdrop_url?: string | null
           runtime?: number | null
           file_size?: number | null
+          tmdb_id?: number | null
           created_at?: string
           updated_at?: string
         }

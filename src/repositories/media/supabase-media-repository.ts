@@ -45,6 +45,7 @@ export class SupabaseMediaRepository implements MediaRepository {
       backdropUrl: row.backdrop_url,
       runtime: row.runtime,
       fileSize: row.file_size,
+      tmdbId: row.tmdb_id,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -76,6 +77,7 @@ export class SupabaseMediaRepository implements MediaRepository {
       backdropUrl: data.backdrop_url,
       runtime: data.runtime,
       fileSize: data.file_size,
+      tmdbId: data.tmdb_id,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };

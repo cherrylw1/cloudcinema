@@ -10,6 +10,7 @@ export interface Media {
   backdropUrl?: string | null;
   runtime?: number | null;
   fileSize?: number | null;
+  tmdbId?: number | null;
   createdAt: string;
   updatedAt: string;
 }
