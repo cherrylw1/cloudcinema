@@ -8,7 +8,11 @@ export type ErrorCode =
   | "ROUTE_NOT_FOUND"
   | "UNAUTHORIZED"
   | "NOT_FOUND"
-  | "INTERNAL_ERROR";
+  | "INTERNAL_ERROR"
+  | "DATABASE_ERROR"
+  | "REPOSITORY_ERROR"
+  | "VALIDATION_ERROR"
+  | "SUPABASE_CONFIG_ERROR";
 
 /**
  * Custom application-wide base error class.
