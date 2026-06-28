@@ -375,7 +375,7 @@ async function processSingleMedia(
   const { error: updateError } = await supabase
     .from("media_library")
     .update({
-      drive_file_id: newDefaultFileId,
+      processed_drive_file_id: newDefaultFileId,
       processing_status: "ready",
       dv_profile: null,
       audio_codec: "aac",

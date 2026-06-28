@@ -38,7 +38,7 @@ export async function GET(
   // 4. Fetch the Drive file ID and metadata from the media library database
   const { data: media, error: dbError } = await supabase
     .from("media_library")
-    .select("drive_file_id, mime_type, file_size")
+    .select("drive_file_id, processed_drive_file_id, mime_type, file_size")
     .eq("id", id)
     .maybeSingle();
 
@@ -46,7 +46,7 @@ export async function GET(
     return NextResponse.json({ error: "Media file not found in library." }, { status: 404 });
   }
 
-  const fileId = media.drive_file_id;
+  const fileId = media.processed_drive_file_id || media.drive_file_id;
   const mimeType = media.mime_type || "video/mp4";
   const fileSize = media.file_size;
 

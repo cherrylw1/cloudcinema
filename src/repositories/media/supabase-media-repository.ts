@@ -60,6 +60,7 @@ export class SupabaseMediaRepository implements MediaRepository {
       processingStatus: row.processing_status,
       audioVariants: (row.audio_variants as AudioVariant[] | null) ?? null,
       subtitleTracks: (row.subtitle_tracks as SubtitleTrack[] | null) ?? null,
+      processedDriveFileId: row.processed_drive_file_id,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -100,6 +101,7 @@ export class SupabaseMediaRepository implements MediaRepository {
       processingStatus: data.processing_status,
       audioVariants: (data.audio_variants as AudioVariant[] | null) ?? null,
       subtitleTracks: (data.subtitle_tracks as SubtitleTrack[] | null) ?? null,
+      processedDriveFileId: data.processed_drive_file_id,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };

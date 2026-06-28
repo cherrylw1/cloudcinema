@@ -43,6 +43,7 @@ export interface Media {
   processingStatus: string;
   audioVariants?: AudioVariant[] | null;
   subtitleTracks?: SubtitleTrack[] | null;
+  processedDriveFileId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

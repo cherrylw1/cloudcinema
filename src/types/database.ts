@@ -57,6 +57,7 @@ export interface Database {
           processing_status: string
           audio_variants: Json | null
           subtitle_tracks: Json | null
+          processed_drive_file_id: string | null
           created_at: string
           updated_at: string
         }
@@ -81,6 +82,7 @@ export interface Database {
           processing_status?: string
           audio_variants?: Json | null
           subtitle_tracks?: Json | null
+          processed_drive_file_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -105,6 +107,7 @@ export interface Database {
           processing_status?: string
           audio_variants?: Json | null
           subtitle_tracks?: Json | null
+          processed_drive_file_id?: string | null
           created_at?: string
           updated_at?: string
         }

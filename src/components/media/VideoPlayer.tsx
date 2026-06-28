@@ -78,7 +78,7 @@ export function VideoPlayer({ media, initialProgress }: VideoPlayerProps) {
 
   const [activeMedia, setActiveMedia] = useState<Media>(media);
   const [status, setStatus] = useState<string>(media.processingStatus || "none");
-  const [selectedAudioVariant, setSelectedAudioVariant] = useState<string>(media.driveFileId);
+  const [selectedAudioVariant, setSelectedAudioVariant] = useState<string>(media.processedDriveFileId || media.driveFileId);
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
 
 
@@ -100,7 +100,7 @@ export function VideoPlayer({ media, initialProgress }: VideoPlayerProps) {
           const mapped = mapDbRowToMedia(data.media);
           setActiveMedia(mapped);
           if (currentStatus === "ready") {
-            setSelectedAudioVariant(mapped.driveFileId);
+            setSelectedAudioVariant(mapped.processedDriveFileId || mapped.driveFileId);
           }
         }
 
