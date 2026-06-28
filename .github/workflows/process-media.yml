@@ -4,13 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       media_id:
-        description: 'The Supabase Media ID to transcode and process'
-        required: true
+        description: 'The Supabase Media ID to transcode and process (leave empty or use "batch" to process queue)'
+        required: false
+        default: 'batch'
         type: string
 
 jobs:
   process-media:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+      fail-fast: false
+    max-parallel: 5
 
     steps:
       - name: Checkout Code
@@ -42,6 +48,7 @@ jobs:
 
       - name: Execute Media Processing Runner
         env:
+          SHARD_INDEX: ${{ matrix.shard }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
