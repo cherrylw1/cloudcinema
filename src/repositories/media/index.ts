@@ -20,6 +20,7 @@ export interface MediaRepository {
     type?: "movie" | "tv-show" | "anime";
     limit?: number;
     offset?: number;
+    query?: string;
   }): Promise<Media[]>;
   getMediaById(id: string): Promise<Media | null>;
 }

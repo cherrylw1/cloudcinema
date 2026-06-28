@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Menu, Search, Sun, Moon, User as UserIcon } from "lucide-react";
 import { navigationItems } from "@/config/navigation";
@@ -85,16 +85,14 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
 
       {/* Right side: Search placeholder, Theme toggle, Avatar */}
       <div className="flex items-center gap-4">
-        {/* Search Input Placeholder */}
-        <div className="relative hidden w-64 sm:block">
-          <Search className="absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-foreground/40" />
-          <input
-            type="text"
-            placeholder="Search movies, shows..."
-            disabled
-            className="w-full rounded-xl border border-border bg-card/50 py-1.5 pr-4 pl-10 text-sm text-foreground placeholder-foreground/40 outline-none transition-all duration-200 cursor-not-allowed"
-          />
-        </div>
+        {/* Search Input wrapped in Suspense */}
+        <Suspense fallback={
+          <div className="relative hidden w-64 sm:block animate-pulse">
+            <div className="w-full h-8 rounded-xl bg-card/45 border border-border/30" />
+          </div>
+        }>
+          <SearchInputWrapper />
+        </Suspense>
 
         {/* Theme Toggle Button */}
         {mounted && (
@@ -155,5 +153,36 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
         )}
       </div>
     </header>
+  );
+}
+
+function SearchInputWrapper() {
+  const searchParams = useSearchParams();
+  const q = searchParams.get("q") || "";
+  return <SearchInput key={q} initialQuery={q} />;
+}
+
+function SearchInput({ initialQuery }: { initialQuery: string }) {
+  const router = useRouter();
+  const [query, setQuery] = useState(initialQuery);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (query.trim()) {
+      router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="relative hidden w-64 sm:block">
+      <Search className="absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-foreground/40" />
+      <input
+        type="text"
+        placeholder="Search movies, shows..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        className="w-full rounded-xl border border-border bg-card/50 py-1.5 pr-4 pl-10 text-sm text-foreground placeholder-foreground/40 outline-none transition-all duration-200 focus:border-brand-primary/80"
+      />
+    </form>
   );
 }

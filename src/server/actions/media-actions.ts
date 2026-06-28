@@ -7,6 +7,7 @@ export async function getMediaListAction(options?: {
   type?: "movie" | "tv-show" | "anime";
   limit?: number;
   offset?: number;
+  query?: string;
 }): Promise<Media[]> {
   try {
     const repository = new SupabaseMediaRepository();

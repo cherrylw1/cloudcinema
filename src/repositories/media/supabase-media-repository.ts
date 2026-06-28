@@ -9,6 +9,7 @@ export class SupabaseMediaRepository implements MediaRepository {
     type?: "movie" | "tv-show" | "anime";
     limit?: number;
     offset?: number;
+    query?: string;
   }): Promise<Media[]> {
     const supabase = await createClient();
     const limit = options?.limit ?? 60;
@@ -20,6 +21,11 @@ export class SupabaseMediaRepository implements MediaRepository {
 
     if (options?.type) {
       query = query.eq("media_type", options.type);
+    }
+
+    if (options?.query) {
+      const q = options.query;
+      query = query.or(`title.ilike.%${q}%,series.ilike.%${q}%`);
     }
 
     // Sort alphabetically by title
