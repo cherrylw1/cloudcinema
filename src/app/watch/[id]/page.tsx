@@ -1,5 +1,8 @@
 import { PageContainer } from "@/components/layout/PageContainer";
 import { SupabaseMediaRepository } from "@/repositories/media/supabase-media-repository";
+import { SupabaseProgressRepository } from "@/repositories/progress/supabase-progress-repository";
+import { VideoPlayer } from "@/components/media/VideoPlayer";
+import { createClient } from "@/clients/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -11,6 +14,16 @@ export default async function WatchPage({ params }: { params: Promise<{ id: stri
 
   if (!media) {
     notFound();
+  }
+
+  // Fetch current user details to load existing playback progress
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  let initialProgress = null;
+  if (user) {
+    const progressRepository = new SupabaseProgressRepository();
+    initialProgress = await progressRepository.getProgress(user.id, media.id);
   }
 
   const isTv = media.mediaType === "tv-show";
@@ -36,17 +49,8 @@ export default async function WatchPage({ params }: { params: Promise<{ id: stri
           </Link>
         </div>
 
-        {/* Video Player Display */}
-        <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black border border-border/40 shadow-2xl">
-          <video
-            controls
-            autoPlay
-            src={`/api/stream/${media.id}`}
-            className="w-full h-full object-contain"
-          >
-            Your browser does not support HTML5 video streaming.
-          </video>
-        </div>
+        {/* Video Player Component */}
+        <VideoPlayer media={media} initialProgress={initialProgress} />
       </div>
     </PageContainer>
   );
