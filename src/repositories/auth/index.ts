@@ -4,6 +4,7 @@ export interface User {
   createdAt: string;
   displayName?: string | null;
   avatarUrl?: string | null;
+  isApproved: boolean;
 }
 
 export interface Session {
@@ -14,7 +15,6 @@ export interface Session {
 export interface AuthRepository {
   getCurrentUser(): Promise<User | null>;
   getSession(): Promise<Session | null>;
-  signIn(email: string, password: string): Promise<Session>;
-  signUp(email: string, password: string): Promise<User>;
+  signInWithGoogle(): Promise<void>;
   signOut(): Promise<void>;
 }
