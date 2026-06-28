@@ -3,10 +3,12 @@ import { env } from "@/config/env";
 import { createAdminClient } from "@/clients/supabase/admin";
 
 interface SyncSummary {
-  scanned: number;
-  added: number;
-  updated: number;
-  skipped: number;
+  scanned: number;    // Total elements processed (folders + files)
+  folders: number;    // Total folders traversed
+  videos: number;     // Total video files processed
+  added: number;      // New videos added to catalog
+  updated: number;    // Existing videos updated
+  skipped: number;    // Non-video files skipped
 }
 
 export class DriveSyncService {
@@ -28,108 +30,168 @@ export class DriveSyncService {
 
   async sync(): Promise<SyncSummary> {
     const rootFolderId = env.googleDriveFolderId || "root";
-    const summary: SyncSummary = { scanned: 0, added: 0, updated: 0, skipped: 0 };
+    const summary: SyncSummary = { scanned: 0, folders: 0, videos: 0, added: 0, updated: 0, skipped: 0 };
     const adminClient = createAdminClient();
 
-    // Recursive traverser helper
-    const traverse = async (folderId: string) => {
-      let pageToken: string | undefined = undefined;
-
-      do {
-        const response: any = await this.drive.files.list({
-          q: `'${folderId}' in parents and trashed = false`,
-          fields: "nextPageToken, files(id, name, mimeType, size)",
-          pageSize: 100,
-          pageToken: pageToken,
-        });
-
-        const files = response.data.files || [];
-        pageToken = response.data.nextPageToken || undefined;
-
-        for (const file of files) {
-          if (!file.id || !file.name || !file.mimeType) {
-            continue;
-          }
-
-          summary.scanned++;
-
-          if (file.mimeType === "application/vnd.google-apps.folder") {
-            // Recurse into subfolder
-            await traverse(file.id);
-          } else if (file.mimeType.startsWith("video/")) {
-            // Process video file
-            const name = file.name;
-            const extensionIndex = name.lastIndexOf(".");
-            const title = extensionIndex !== -1 ? name.substring(0, extensionIndex) : name;
-
-            // SxxExx pattern matching (e.g. S01E02)
-            const match = name.match(/s(\d{1,2})e(\d{1,3})/i);
-
-            let mediaType: "movie" | "tv-show" | "anime" = "movie";
-            let series: string | null = null;
-            let season: number | null = null;
-            let episode: number | null = null;
-
-            if (match) {
-              mediaType = "tv-show";
-              season = parseInt(match[1], 10);
-              episode = parseInt(match[2], 10);
-
-              // Extract series name from the part before SxxExx
-              const prefix = name.substring(0, match.index).trim();
-              // Clean up trailing dots, dashes, underscores, and spaces
-              series = prefix.replace(/[-_\.\s]+$/, "").trim();
-              if (!series) {
-                series = "Unknown Series";
-              }
-            }
-
-            const fileSize = file.size ? parseInt(file.size, 10) : null;
-
-            // Check if record already exists in database to count added vs updated
-            const { data: existing, error: selectError } = await adminClient
-              .from("media_library")
-              .select("id")
-              .eq("drive_file_id", file.id)
-              .maybeSingle();
-
-            if (selectError) {
-              throw selectError;
-            }
-
-            const { error: upsertError } = await adminClient
-              .from("media_library")
-              .upsert(
-                {
-                  drive_file_id: file.id,
-                  title: title,
-                  series: series,
-                  season: season,
-                  episode: episode,
-                  media_type: mediaType,
-                  file_size: fileSize,
-                },
-                { onConflict: "drive_file_id" }
-              );
-
-            if (upsertError) {
-              throw upsertError;
-            }
-
-            if (existing) {
-              summary.updated++;
-            } else {
-              summary.added++;
-            }
-          } else {
-            // Non-video files are skipped
-            summary.skipped++;
-          }
+    console.log(`[Sync] Resolving start folder ID for: ${rootFolderId}`);
+    let startFolderId = rootFolderId;
+    if (rootFolderId === "root") {
+      try {
+        const rootMeta: any = await this.drive.files.get({ fileId: "root", fields: "id" });
+        if (rootMeta.data.id) {
+          startFolderId = rootMeta.data.id;
+          console.log(`[Sync] Resolved root alias to true ID: ${startFolderId}`);
         }
-      } while (pageToken);
+      } catch (err) {
+        console.warn("[Sync] Failed to resolve root ID alias, falling back to 'root'", err);
+      }
+    }
+
+    console.log(`[Sync] Fetching file catalog list from Google Drive...`);
+    const allFiles: any[] = [];
+    let pageToken: string | undefined = undefined;
+
+    do {
+      const response: any = await this.drive.files.list({
+        q: "trashed = false",
+        fields: "nextPageToken, files(id, name, mimeType, size, parents)",
+        pageSize: 1000,
+        pageToken: pageToken,
+      });
+
+      const files = response.data.files || [];
+      allFiles.push(...files);
+      pageToken = response.data.nextPageToken || undefined;
+      console.log(`[Sync] Loaded ${allFiles.length} file metadata entries...`);
+    } while (pageToken);
+
+    console.log(`[Sync] Building parent-child folder tree in memory...`);
+    const folderChildrenMap = new Map<string, any[]>();
+
+    for (const file of allFiles) {
+      if (!file.id) continue;
+      const parents = file.parents || [];
+      for (const parentId of parents) {
+        if (!folderChildrenMap.has(parentId)) {
+          folderChildrenMap.set(parentId, []);
+        }
+        folderChildrenMap.get(parentId)!.push(file);
+      }
+    }
+
+    console.log(`[Sync] Performing depth-first traversal from: ${startFolderId}`);
+    const visitedFolders = new Set<string>();
+    const qualifyingVideos: any[] = [];
+
+    const traverse = (folderId: string) => {
+      if (visitedFolders.has(folderId)) return;
+      visitedFolders.add(folderId);
+      summary.folders++;
+
+      const children = folderChildrenMap.get(folderId) || [];
+      for (const child of children) {
+        if (child.mimeType === "application/vnd.google-apps.folder") {
+          traverse(child.id);
+        } else if (child.mimeType.startsWith("video/")) {
+          summary.videos++;
+          qualifyingVideos.push(child);
+        } else {
+          summary.skipped++;
+        }
+      }
     };
 
-    await traverse(rootFolderId);
+    // Run in-memory tree traversal
+    traverse(startFolderId);
+
+    console.log(`[Sync] Traversal complete. Folders: ${summary.folders}, Videos: ${summary.videos}, Skipped: ${summary.skipped}`);
+
+    if (qualifyingVideos.length === 0) {
+      summary.scanned = summary.folders + summary.videos + summary.skipped;
+      return summary;
+    }
+
+    console.log(`[Sync] Querying existing DB records to identify additions/updates...`);
+    const driveFileIds = qualifyingVideos.map((v) => v.id);
+    const existingFileIdsSet = new Set<string>();
+
+    const dbChunkSize = 100;
+    for (let i = 0; i < driveFileIds.length; i += dbChunkSize) {
+      const chunk = driveFileIds.slice(i, i + dbChunkSize);
+      const { data: existingList, error } = await adminClient
+        .from("media_library")
+        .select("drive_file_id")
+        .in("drive_file_id", chunk);
+
+      if (error) throw error;
+      if (existingList) {
+        for (const row of existingList) {
+          existingFileIdsSet.add(row.drive_file_id);
+        }
+      }
+    }
+
+    console.log(`[Sync] Preparing catalog payload...`);
+    const upsertPayload: any[] = [];
+
+    for (const file of qualifyingVideos) {
+      const name = file.name;
+      const extensionIndex = name.lastIndexOf(".");
+      const title = extensionIndex !== -1 ? name.substring(0, extensionIndex) : name;
+
+      const match = name.match(/s(\d{1,2})e(\d{1,3})/i);
+
+      let mediaType: "movie" | "tv-show" | "anime" = "movie";
+      let series: string | null = null;
+      let season: number | null = null;
+      let episode: number | null = null;
+
+      if (match) {
+        mediaType = "tv-show";
+        season = parseInt(match[1], 10);
+        episode = parseInt(match[2], 10);
+
+        const prefix = name.substring(0, match.index).trim();
+        series = prefix.replace(/[-_\.\s]+$/, "").trim();
+        if (!series) {
+          series = "Unknown Series";
+        }
+      }
+
+      const fileSize = file.size ? parseInt(file.size, 10) : null;
+      const isExisting = existingFileIdsSet.has(file.id);
+
+      if (isExisting) {
+        summary.updated++;
+      } else {
+        summary.added++;
+      }
+
+      upsertPayload.push({
+        drive_file_id: file.id,
+        title: title,
+        series: series,
+        season: season,
+        episode: episode,
+        media_type: mediaType,
+        file_size: fileSize,
+      });
+    }
+
+    console.log(`[Sync] Upserting ${upsertPayload.length} media records in batches of 100...`);
+    const upsertChunkSize = 100;
+    for (let i = 0; i < upsertPayload.length; i += upsertChunkSize) {
+      const chunk = upsertPayload.slice(i, i + upsertChunkSize);
+      const { error } = await adminClient
+        .from("media_library")
+        .upsert(chunk, { onConflict: "drive_file_id" });
+
+      if (error) throw error;
+    }
+
+    // Set self-consistent scanned sum
+    summary.scanned = summary.folders + summary.added + summary.updated + summary.skipped;
+    console.log(`[Sync] Synchronization completed successfully.`);
     return summary;
   }
 }
