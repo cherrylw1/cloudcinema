@@ -91,6 +91,7 @@ export class MetadataSyncService {
             title: tmdbMatch.title,
             poster_url: posterUrl,
             backdrop_url: backdropUrl,
+            overview: tmdbMatch.overview,
             runtime: tmdbMatch.runtime,
             media_type: updatedMediaType,
           })
@@ -98,6 +99,28 @@ export class MetadataSyncService {
 
         if (updateError) {
           console.error(`[Metadata Sync] Failed to update row ID ${row.id}:`, updateError);
+        } else if (row.media_type === "tv-show" || row.media_type === "anime") {
+          // For TV shows: propagate poster/backdrop/overview/tmdb_id to all sibling episodes
+          const seriesKey = row.series || row.title;
+          if (seriesKey) {
+            const { error: siblingError } = await this.adminClient
+              .from("media_library")
+              .update({
+                poster_url: posterUrl,
+                backdrop_url: backdropUrl,
+                overview: tmdbMatch.overview,
+                tmdb_id: tmdbMatch.id,
+                media_type: updatedMediaType,
+              })
+              .eq("series", seriesKey)
+              .neq("id", row.id); // Don't update the current row again
+
+            if (siblingError) {
+              console.error(`[Metadata Sync] Failed to propagate to siblings for series "${seriesKey}":`, siblingError);
+            } else {
+              console.log(`[Metadata Sync] Propagated metadata to siblings for series "${seriesKey}"`);
+            }
+          }
         }
       } else {
         result.unmatched++;

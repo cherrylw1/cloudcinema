@@ -46,6 +46,7 @@ export interface Database {
           media_type: "movie" | "tv-show" | "anime"
           poster_url: string | null
           backdrop_url: string | null
+          overview: string | null
           runtime: number | null
           file_size: number | null
           tmdb_id: number | null
@@ -71,6 +72,7 @@ export interface Database {
           media_type: "movie" | "tv-show" | "anime"
           poster_url?: string | null
           backdrop_url?: string | null
+          overview?: string | null
           runtime?: number | null
           file_size?: number | null
           tmdb_id?: number | null
@@ -96,6 +98,7 @@ export interface Database {
           media_type?: "movie" | "tv-show" | "anime"
           poster_url?: string | null
           backdrop_url?: string | null
+          overview?: string | null
           runtime?: number | null
           file_size?: number | null
           tmdb_id?: number | null

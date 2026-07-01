@@ -32,6 +32,7 @@ export interface Media {
   mediaType: "movie" | "tv-show" | "anime";
   posterUrl?: string | null;
   backdropUrl?: string | null;
+  overview?: string | null;
   runtime?: number | null;
   fileSize?: number | null;
   tmdbId?: number | null;

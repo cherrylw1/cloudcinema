@@ -2,6 +2,7 @@ export interface TmdbMetadata {
   title: string;
   posterPath: string | null;
   backdropPath: string | null;
+  overview: string | null;
   runtime: number | null;
   genreIds: number[];
   originalLanguage: string;
@@ -41,6 +42,7 @@ export class TmdbService {
       results?: Array<{
         id: number;
         title: string;
+        overview: string;
         poster_path: string | null;
         backdrop_path: string | null;
         genre_ids: number[];
@@ -90,6 +92,7 @@ export class TmdbService {
       title: bestMatch.title,
       posterPath: bestMatch.poster_path,
       backdropPath: bestMatch.backdrop_path,
+      overview: bestMatch.overview || null,
       runtime,
       genreIds: bestMatch.genre_ids || [],
       originalLanguage: bestMatch.original_language,
@@ -101,6 +104,7 @@ export class TmdbService {
       results?: Array<{
         id: number;
         name: string;
+        overview: string;
         poster_path: string | null;
         backdrop_path: string | null;
         genre_ids: number[];
@@ -135,9 +139,57 @@ export class TmdbService {
       title: bestMatch.name,
       posterPath: bestMatch.poster_path,
       backdropPath: bestMatch.backdrop_path,
+      overview: bestMatch.overview || null,
       runtime,
       genreIds: bestMatch.genre_ids || [],
       originalLanguage: bestMatch.original_language,
     };
+  }
+
+  /**
+   * Search TMDB for multiple results (for manual match UI).
+   * Returns an array of candidate matches with title, overview, poster, and release info.
+   */
+  async searchAll(
+    query: string,
+    type: "movie" | "tv"
+  ): Promise<Array<{ id: number; title: string; overview: string; posterPath: string | null; releaseDate: string }>> {
+    if (type === "movie") {
+      interface MovieSearchResponse {
+        results?: Array<{
+          id: number;
+          title: string;
+          overview: string;
+          poster_path: string | null;
+          release_date?: string;
+        }>;
+      }
+      const data = await this.request<MovieSearchResponse>("/search/movie", { query });
+      return (data.results || []).slice(0, 10).map((r) => ({
+        id: r.id,
+        title: r.title,
+        overview: r.overview || "",
+        posterPath: r.poster_path,
+        releaseDate: r.release_date || "",
+      }));
+    } else {
+      interface TvSearchResponse {
+        results?: Array<{
+          id: number;
+          name: string;
+          overview: string;
+          poster_path: string | null;
+          first_air_date?: string;
+        }>;
+      }
+      const data = await this.request<TvSearchResponse>("/search/tv", { query });
+      return (data.results || []).slice(0, 10).map((r) => ({
+        id: r.id,
+        title: r.name,
+        overview: r.overview || "",
+        posterPath: r.poster_path,
+        releaseDate: r.first_air_date || "",
+      }));
+    }
   }
 }
