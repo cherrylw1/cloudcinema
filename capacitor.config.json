@@ -1,0 +1,9 @@
+{
+  "appId": "com.cloudcinema.app",
+  "appName": "CloudCinema",
+  "webDir": "public",
+  "server": {
+    "url": "https://cloudcinema.vercel.app",
+    "cleartext": true
+  }
+}
