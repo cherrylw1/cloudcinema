@@ -62,7 +62,11 @@ export function PaginatedMediaGrid({ initialMedia, type, query, emptyStateMessag
   return (
     <div className="space-y-8">
       {/* Grid Layout */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className={
+        type === "movie"
+          ? "grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3 sm:gap-5"
+          : "grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3 sm:gap-5"
+      }>
         {mediaList.map((media) =>
           type === "movie" ? (
             <SeriesCard key={media.id} media={media} horizontal={true} />

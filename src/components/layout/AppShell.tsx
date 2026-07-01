@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
+import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { SelectionProvider } from "@/providers/SelectionProvider";
 
 interface AppShellProps {
@@ -34,10 +35,13 @@ export function AppShell({ children }: AppShellProps) {
           <TopBar onOpenSidebar={() => setIsSidebarOpen(true)} />
 
           {/* Content Container */}
-          <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto animate-fade-in">
+          <main className="flex-1 p-6 pb-24 md:p-8 md:pb-8 max-w-7xl w-full mx-auto animate-fade-in">
             {children}
           </main>
         </div>
+
+        {/* Mobile Bottom Navigation Bar */}
+        <BottomNavBar />
       </div>
     </SelectionProvider>
   );

@@ -163,31 +163,31 @@ export default async function Home() {
               </span>
 
               {/* Title */}
-              <h1 className="text-4xl md:text-6xl font-black text-white leading-tight drop-shadow-2xl">
+              <h1 className="text-3xl sm:text-4xl md:text-6xl font-black text-white leading-tight drop-shadow-2xl">
                 {heroTitle}
               </h1>
 
               {/* Overview */}
               {heroItem.overview && (
-                <p className="text-base md:text-lg text-white/80 leading-relaxed max-w-xl line-clamp-3">
+                <p className="text-sm md:text-base text-white/80 leading-relaxed max-w-xl line-clamp-3">
                   {heroItem.overview}
                 </p>
               )}
 
               {/* Buttons */}
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex items-center gap-2.5 pt-1.5">
                 <Link
                   href={`/watch/${heroItem.id}`}
-                  className="flex items-center gap-2 px-8 py-3 bg-white text-black rounded-lg font-bold text-base hover:bg-white/90 transition-all shadow-xl"
+                  className="flex items-center gap-2 px-5 py-2.5 md:px-8 md:py-3 bg-white text-black rounded-lg font-bold text-sm md:text-base hover:bg-white/90 transition-all shadow-xl"
                 >
-                  <Play className="h-5 w-5 fill-black" />
+                  <Play className="h-4.5 w-4.5 fill-black" />
                   Play
                 </Link>
                 <Link
                   href={heroHref}
-                  className="flex items-center gap-2 px-6 py-3 bg-white/20 backdrop-blur-sm text-white rounded-lg font-semibold text-base hover:bg-white/30 border border-white/20 transition-all"
+                  className="flex items-center gap-2 px-4 py-2.5 md:px-6 md:py-3 bg-white/20 backdrop-blur-sm text-white rounded-lg font-semibold text-sm md:text-base hover:bg-white/30 border border-white/20 transition-all"
                 >
-                  <Info className="h-5 w-5" />
+                  <Info className="h-4.5 w-4.5" />
                   More Info
                 </Link>
               </div>
@@ -197,7 +197,7 @@ export default async function Home() {
       )}
 
       {/* ──────────────────── CONTENT ROWS ──────────────────── */}
-      <div className="relative z-10 -mt-32 px-8 md:px-16 pb-20 space-y-10">
+      <div className="relative z-10 -mt-24 md:-mt-32 px-4 md:px-16 pb-20 space-y-8 md:space-y-10">
 
         {/* Continue Watching */}
         {continueWatching.length > 0 && (
