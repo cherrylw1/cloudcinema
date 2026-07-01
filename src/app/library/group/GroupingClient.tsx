@@ -21,6 +21,7 @@ export function GroupingClient({ initialMedia }: GroupingClientProps) {
   const [filterUngrouped, setFilterUngrouped] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [seriesName, setSeriesName] = useState("");
+  const [mediaType, setMediaType] = useState<"tv-show" | "anime">("tv-show");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -83,6 +84,7 @@ export function GroupingClient({ initialMedia }: GroupingClientProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ids: selectedIds,
+          mediaType,
           seriesName: seriesName.trim(),
         }),
       });
@@ -97,7 +99,7 @@ export function GroupingClient({ initialMedia }: GroupingClientProps) {
       setMediaList((prev) =>
         prev.map((item) =>
           selectedIds.includes(item.id)
-            ? { ...item, series: updatedName, mediaType: "tv-show" }
+            ? { ...item, series: updatedName, mediaType }
             : item
         )
       );
@@ -258,6 +260,34 @@ export function GroupingClient({ initialMedia }: GroupingClientProps) {
             )}
 
             <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] uppercase font-bold tracking-wider text-foreground/50 mb-1.5">
+                  Series Type
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setMediaType("tv-show")}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                      mediaType === "tv-show"
+                        ? "bg-brand-primary border-brand-primary text-white"
+                        : "border-white/10 text-white/60 hover:text-white bg-white/5"
+                    }`}
+                  >
+                    TV Show
+                  </button>
+                  <button
+                    onClick={() => setMediaType("anime")}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                      mediaType === "anime"
+                        ? "bg-brand-primary border-brand-primary text-white"
+                        : "border-white/10 text-white/60 hover:text-white bg-white/5"
+                    }`}
+                  >
+                    Anime
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[10px] uppercase font-bold tracking-wider text-foreground/50 mb-1.5">
                   Series / Folder Title
