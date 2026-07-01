@@ -59,6 +59,8 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
   // Fetch watch progress for user
   const { data: { user } } = await supabase.auth.getUser();
   const progressMap: Record<string, { position: number; completed: boolean }> = {};
+  let isInWatchlist = false;
+
   if (user) {
     const mediaIds = episodes.map((e) => e.id);
     const { data: progress } = await supabase
@@ -69,6 +71,15 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
     for (const p of progress || []) {
       progressMap[p.media_id] = { position: p.playback_position, completed: p.completed };
     }
+
+    // Check if this show is currently in the user's watchlist
+    const { data: watchlistEntry } = await supabase
+      .from("watchlist")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("media_id", showMeta.id)
+      .maybeSingle();
+    isInWatchlist = !!watchlistEntry;
   }
 
   // Find first unwatched episode for the main Play button
@@ -137,7 +148,13 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
                   <Play className="h-4 w-4 fill-black" />
                   Play
                 </Link>
-                <SeriesDetailClient seriesName={decoded} defaultType={showMeta.media_type === "movie" ? "movie" : "tv"} />
+                <SeriesDetailClient
+                  seriesName={decoded}
+                  defaultType={showMeta.media_type === "movie" ? "movie" : "tv"}
+                  mediaId={showMeta.id}
+                  initialInWatchlist={isInWatchlist}
+                  userId={user?.id || null}
+                />
               </div>
             </div>
           </div>

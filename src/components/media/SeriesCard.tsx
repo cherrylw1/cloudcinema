@@ -14,9 +14,13 @@ interface SeriesCardProps {
 export function SeriesCard({ media, horizontal = false }: SeriesCardProps) {
   const isEpisodic = media.mediaType === "tv-show" || media.mediaType === "anime";
   const displayTitle = isEpisodic && media.series ? media.series : media.title;
-  const href = isEpisodic && media.series
-    ? `/series/${encodeURIComponent(media.series)}`
-    : `/watch/${media.id}`;
+  
+  let href = `/watch/${media.id}`;
+  if (media.mediaType === "movie") {
+    href = `/movies/${media.id}`;
+  } else if (isEpisodic && media.series) {
+    href = `/series/${encodeURIComponent(media.series)}`;
+  }
 
   if (horizontal) {
     return (
