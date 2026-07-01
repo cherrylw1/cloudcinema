@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Search, FolderPlus, ArrowUpDown, ChevronUp, ChevronDown, Loader2, ArrowLeft, X } from "lucide-react";
+import { Search, FolderPlus, ArrowUpDown, ChevronUp, ChevronDown, Loader2, ArrowLeft, X, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type { Media } from "@/repositories/media";
 
@@ -111,6 +111,43 @@ export function GroupingClient({ initialMedia }: GroupingClientProps) {
       setMessage({
         type: "error",
         text: err instanceof Error ? err.message : "Failed to group files.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete these ${selectedIds.length} selected files from database and Google Drive?`
+      )
+    ) {
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/media/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Deletion failed");
+
+      setMessage({ type: "success", text: data.message });
+
+      // Update local state: remove deleted items from the list
+      setMediaList((prev) => prev.filter((item) => !selectedIds.includes(item.id)));
+      setSelectedIds([]);
+    } catch (err) {
+      setMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to delete files.",
       });
     } finally {
       setLoading(false);
@@ -351,14 +388,25 @@ export function GroupingClient({ initialMedia }: GroupingClientProps) {
                 )}
               </div>
 
-              <button
-                onClick={handleGroup}
-                disabled={loading || selectedIds.length === 0 || !seriesName.trim()}
-                className="w-full py-2.5 bg-brand-primary text-white rounded-xl text-xs font-bold hover:bg-brand-primary/95 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
-              >
-                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />}
-                {loading ? "Grouping Files..." : "Create TV Series Folder"}
-              </button>
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={handleGroup}
+                  disabled={loading || selectedIds.length === 0 || !seriesName.trim()}
+                  className="flex-grow py-2.5 bg-brand-primary text-white rounded-xl text-xs font-bold hover:bg-brand-primary/95 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />}
+                  {loading ? "Grouping..." : "Group Series"}
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={loading || selectedIds.length === 0}
+                  className="px-4 py-2.5 bg-red-600/90 hover:bg-red-600 text-white rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  title="Delete selected files permanently"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>

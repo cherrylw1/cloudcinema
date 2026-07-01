@@ -56,6 +56,32 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
     setIsSelectionMode(false);
   };
 
+  const handleDelete = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete these ${selectedIds.length} selected items from database and Google Drive?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/media/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Deletion failed");
+
+      alert(data.message);
+      exitSelectionMode();
+      window.location.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Deletion failed");
+    }
+  };
+
   return (
     <SelectionContext.Provider
       value={{
@@ -71,7 +97,7 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
 
       {/* Floating Selection Bar */}
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[95%] max-w-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
           <div className="flex items-center justify-between gap-4 px-6 py-4 rounded-2xl bg-black/90 border border-white/10 backdrop-blur-md shadow-2xl">
             <div className="flex items-center gap-3">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-primary text-xs font-bold text-white font-mono">
@@ -85,16 +111,22 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsDialogOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-primary text-white rounded-lg text-xs font-bold hover:bg-brand-primary/95 transition-all cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-primary text-white rounded-lg text-xs font-bold hover:bg-brand-primary/95 transition-all cursor-pointer animate-pulse"
               >
                 <FolderPlus className="h-3.5 w-3.5" />
                 Group
               </button>
               <button
+                onClick={handleDelete}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+              <button
                 onClick={clearSelection}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 border border-white/10 text-white hover:bg-white/20 rounded-lg text-xs font-medium transition-all cursor-pointer"
               >
-                <Trash2 className="h-3.5 w-3.5" />
                 Clear
               </button>
               <button
