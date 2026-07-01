@@ -248,25 +248,18 @@ export function VideoPlayer({ media, initialProgress, streamToken, userId }: Vid
           
           <div className="flex flex-wrap gap-2 pt-1">
             <a 
-              href={`vlc://${getStreamUrl().replace(/^https?:\/\//, "")}`} 
+              href={`vlc://${getStreamUrl().replace(/&/g, "%26")}`} 
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600/10 text-orange-500 border border-orange-600/20 hover:bg-orange-600/20 hover:text-orange-400 transition-all text-xs font-semibold cursor-pointer"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               Play in VLC
             </a>
             <a 
-              href={`potplayer://${getStreamUrl()}`} 
+              href={`potplayer://${getStreamUrl().replace(/&/g, "%26")}`} 
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-600/10 text-yellow-500 border border-yellow-600/20 hover:bg-yellow-600/20 hover:text-yellow-400 transition-all text-xs font-semibold cursor-pointer"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               Play in PotPlayer
-            </a>
-            <a 
-              href={`infuse://x-callback-url/play?url=${encodeURIComponent(getStreamUrl())}`} 
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/10 text-blue-400 border border-blue-600/20 hover:bg-blue-600/20 hover:text-blue-300 transition-all text-xs font-semibold cursor-pointer"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Play in Infuse
             </a>
             <a 
               href={`iina://weblink?url=${encodeURIComponent(getStreamUrl())}`} 
@@ -292,6 +285,10 @@ export function VideoPlayer({ media, initialProgress, streamToken, userId }: Vid
               )}
             </button>
           </div>
+
+          <p className="text-[10px] text-foreground/30 mt-2 font-medium leading-relaxed">
+            💡 <strong>Windows/Mac Tip:</strong> If clicking doesn&apos;t open your player, simply click <strong>Copy Stream Link</strong>, open your player (VLC/PotPlayer), press <strong>Ctrl+U</strong> (or <strong>Command+U</strong> on Mac), paste the link, and hit play.
+          </p>
         </div>
       )}
     </div>
