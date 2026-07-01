@@ -53,23 +53,23 @@ export function SeriesDetailClient({
   };
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2">
       {/* Watchlist Toggle Button */}
       <button
         onClick={handleWatchlistToggle}
         disabled={loading}
-        className={`flex items-center gap-2 px-5 py-2.5 border rounded-lg font-semibold text-sm transition-all cursor-pointer hover:bg-white/10 ${
+        className={`flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 border rounded-lg font-semibold text-xs sm:text-sm transition-all cursor-pointer hover:bg-white/10 ${
           inWatchlist
             ? "bg-white/15 border-white/20 text-white"
             : "bg-white/5 border-white/10 text-white/90 hover:text-white"
         }`}
       >
         {loading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
         ) : inWatchlist ? (
-          <Check className="h-4 w-4 text-green-500 fill-green-500/20" />
+          <Check className="h-3.5 w-3.5 text-green-500 fill-green-500/20" />
         ) : (
-          <Plus className="h-4 w-4" />
+          <Plus className="h-3.5 w-3.5" />
         )}
         Watchlist
       </button>
@@ -78,7 +78,7 @@ export function SeriesDetailClient({
       <EditMetadataButton
         seriesName={seriesName}
         defaultType={defaultType}
-        className="flex items-center gap-2 px-5 py-2.5 border border-white/10 bg-white/5 text-white/90 hover:text-white hover:bg-white/10 rounded-lg font-semibold text-sm transition-all cursor-pointer"
+        className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 border border-white/10 bg-white/5 text-white/90 hover:text-white hover:bg-white/10 rounded-lg font-semibold text-xs sm:text-sm transition-all cursor-pointer"
       />
     </div>
   );

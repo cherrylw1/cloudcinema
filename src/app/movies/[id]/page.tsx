@@ -123,8 +123,8 @@ export default async function MovieDetailsPage({ params }: MoviePageProps) {
       </div>
 
       {/* Main content */}
-      <div className="relative z-10 min-h-screen flex flex-col justify-end px-6 md:px-16 pb-16 md:pb-24 pt-24">
-        <div className="max-w-5xl flex flex-col md:flex-row gap-10 items-end">
+      <div className="relative z-10 min-h-screen flex flex-col justify-end px-4 sm:px-6 md:px-16 pb-24 md:pb-24 pt-24">
+        <div className="max-w-5xl flex flex-col md:flex-row gap-6 md:gap-10 items-end">
           {/* Poster — desktop only */}
           {movie.poster_url && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -142,7 +142,7 @@ export default async function MovieDetailsPage({ params }: MoviePageProps) {
 
           {/* Info panel — frosted glass */}
           <div
-            className="flex-1 p-8 space-y-5 animate-slide-up"
+            className="w-full flex-1 p-4 sm:p-8 space-y-4 sm:space-y-5 animate-slide-up"
             style={{
               background: "rgba(255,255,255,0.04)",
               backdropFilter: "blur(40px) saturate(180%)",

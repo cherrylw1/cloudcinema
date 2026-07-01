@@ -138,8 +138,8 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
         </div>
 
         {/* Hero content */}
-        <div className="absolute bottom-0 left-0 right-0 p-8 md:p-14 z-10">
-          <div className="flex gap-7 items-end max-w-5xl">
+        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-8 md:p-14 z-10">
+          <div className="flex gap-4 sm:gap-7 items-end max-w-5xl">
             {posterUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -178,10 +178,10 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
                   {overview}
                 </p>
               )}
-              <div className="flex items-center gap-3 pt-1">
+              <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-1">
                 <Link
                   href={`/watch/${firstUnwatched.id}`}
-                  className="inline-flex items-center gap-2 px-7 py-2.5 rounded-2xl text-sm font-bold text-black hover:opacity-90 transition-all duration-200 shadow-lg"
+                  className="inline-flex items-center gap-2 px-5 sm:px-7 py-2.5 rounded-2xl text-sm font-bold text-black hover:opacity-90 transition-all duration-200 shadow-lg animate-scale-in"
                   style={{
                     background: "rgba(255,255,255,0.95)",
                     boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
