@@ -9,22 +9,25 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ params: string[] }> }
 ) {
   // 1. Resolve and validate route params
-  const { id } = await params;
+  const resolvedParams = await context.params;
+  const paramArray = resolvedParams.params || [];
+  
+  const id = paramArray[0];
+  const token = paramArray[1];
+  const uid = paramArray[2];
+  const paramDriveFileId = paramArray[3];
+
   if (!id) {
     return NextResponse.json({ error: "Missing media identifier." }, { status: 400 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const token = searchParams.get("token");
-  const uid = searchParams.get("uid");
-
   const supabase = await createClient();
   let isAuthorized = false;
 
-  // 2. Validate token or check cookie session
+  // 2. Validate token (path-based) or check cookie session
   if (token && uid) {
     if (verifyStreamToken(id, uid, token)) {
       // Validate that the user exists and is approved in the database
@@ -68,10 +71,13 @@ export async function GET(
     return NextResponse.json({ error: "Media file not found in library." }, { status: 404 });
   }
 
-  const paramDriveFileId = searchParams.get("driveFileId");
+  // Check if there is a query-based override or path-based override
+  const { searchParams } = new URL(request.url);
+  const queryDriveFileId = searchParams.get("driveFileId");
+  const driveFileId = paramDriveFileId || queryDriveFileId;
 
-  const fileId = paramDriveFileId || media.processed_drive_file_id || media.drive_file_id;
-  const mimeType = paramDriveFileId ? "video/mp4" : (media.mime_type || "video/mp4");
+  const fileId = driveFileId || media.processed_drive_file_id || media.drive_file_id;
+  const mimeType = driveFileId ? "video/mp4" : (media.mime_type || "video/mp4");
   let fileSize = media.file_size;
 
   try {
@@ -89,7 +95,7 @@ export async function GET(
     const drive = google.drive({ version: "v3", auth: oauth2Client });
 
     // Fetch size of variant if needed
-    if (paramDriveFileId || !fileSize) {
+    if (driveFileId || !fileSize) {
       const metaRes = await drive.files.get({
         fileId,
         fields: "size",

@@ -55,14 +55,22 @@ export function VideoPlayer({ media, initialProgress, streamToken, userId }: Vid
   const [selectedAudioVariant, setSelectedAudioVariant] = useState<string>(media.processedDriveFileId || media.driveFileId);
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
   const [copied, setCopied] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
 
-  // Construct absolute stream URL with signed credentials
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsAndroid(/android/i.test(navigator.userAgent));
+    }
+  }, []);
+
+  // Construct absolute stream URL with signed credentials (pure path-based)
   const getStreamUrl = () => {
     if (typeof window === "undefined") return "";
-    const variantQuery = selectedAudioVariant !== (activeMedia.processedDriveFileId || activeMedia.driveFileId)
-      ? `&driveFileId=${selectedAudioVariant}`
+    const variantPath = selectedAudioVariant !== (activeMedia.processedDriveFileId || activeMedia.driveFileId)
+      ? `/${selectedAudioVariant}`
       : "";
-    return `${window.location.origin}/api/stream/${activeMedia.id}?token=${streamToken}&uid=${userId}${variantQuery}`;
+    return `${window.location.origin}/api/stream/${activeMedia.id}/${streamToken}/${userId}${variantPath}`;
   };
 
   const handleCopyLink = async () => {
@@ -248,14 +256,17 @@ export function VideoPlayer({ media, initialProgress, streamToken, userId }: Vid
           
           <div className="flex flex-wrap gap-2 pt-1">
             <a 
-              href={`vlc://${getStreamUrl().replace(/&/g, "%26")}`} 
+              href={isAndroid 
+                ? `intent://${getStreamUrl().replace(/^https?:\/\//, "")}#Intent;package=org.videolan.vlc;type=video/*;scheme=https;end`
+                : `vlc://${getStreamUrl().replace(/^https?:\/\//, "")}`
+              } 
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600/10 text-orange-500 border border-orange-600/20 hover:bg-orange-600/20 hover:text-orange-400 transition-all text-xs font-semibold cursor-pointer"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               Play in VLC
             </a>
             <a 
-              href={`potplayer://${getStreamUrl().replace(/&/g, "%26")}`} 
+              href={`potplayer://${getStreamUrl()}`} 
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-600/10 text-yellow-500 border border-yellow-600/20 hover:bg-yellow-600/20 hover:text-yellow-400 transition-all text-xs font-semibold cursor-pointer"
             >
               <ExternalLink className="h-3.5 w-3.5" />
