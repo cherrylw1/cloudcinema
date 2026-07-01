@@ -71,6 +71,25 @@ export async function GET(
     return NextResponse.json({ error: "Media file not found in library." }, { status: 404 });
   }
 
+  // Handle M3U playlist file requests
+  if (paramDriveFileId === "playlist.m3u") {
+    const origin = request.nextUrl.origin;
+    const streamUrl = `${origin}/api/stream/${id}/${token}/${uid}`;
+    
+    // We clean filename to be ASCII safe
+    const cleanTitle = (media.mime_type || "video").includes("video") ? "Play Video" : "Play Media";
+    const m3uContent = `#EXTM3U\n#EXTINF:-1,${cleanTitle}\n${streamUrl}\n`;
+    
+    return new Response(m3uContent, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/x-mpegurl",
+        "Content-Disposition": `attachment; filename="play.m3u"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   // Check if there is a query-based override or path-based override
   const { searchParams } = new URL(request.url);
   const queryDriveFileId = searchParams.get("driveFileId");

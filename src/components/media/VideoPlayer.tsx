@@ -255,23 +255,23 @@ export function VideoPlayer({ media, initialProgress, streamToken, userId }: Vid
           </div>
           
           <div className="flex flex-wrap gap-2 pt-1">
-            <a 
-              href={isAndroid 
-                ? `intent://${getStreamUrl().replace(/^https?:\/\//, "")}#Intent;package=org.videolan.vlc;type=video/*;scheme=https;end`
-                : `vlc://${getStreamUrl().replace(/^https?:\/\//, "")}`
-              } 
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600/10 text-orange-500 border border-orange-600/20 hover:bg-orange-600/20 hover:text-orange-400 transition-all text-xs font-semibold cursor-pointer"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Play in VLC
-            </a>
-            <a 
-              href={`potplayer://${getStreamUrl()}`} 
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-600/10 text-yellow-500 border border-yellow-600/20 hover:bg-yellow-600/20 hover:text-yellow-400 transition-all text-xs font-semibold cursor-pointer"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Play in PotPlayer
-            </a>
+            {isAndroid ? (
+              <a 
+                href={`intent://${getStreamUrl().replace(/^https?:\/\//, "")}#Intent;package=org.videolan.vlc;type=video/*;scheme=https;end`} 
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600/10 text-orange-500 border border-orange-600/20 hover:bg-orange-600/20 hover:text-orange-400 transition-all text-xs font-semibold cursor-pointer"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Play in VLC (Android)
+              </a>
+            ) : (
+              <a 
+                href={`${window.location.origin}/api/stream/${activeMedia.id}/${streamToken}/${userId}/playlist.m3u`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600/10 text-orange-500 border border-orange-600/20 hover:bg-orange-600/20 hover:text-orange-400 transition-all text-xs font-semibold cursor-pointer"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Play in Desktop Player (VLC / PotPlayer)
+              </a>
+            )}
             <a 
               href={`iina://weblink?url=${encodeURIComponent(getStreamUrl())}`} 
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/10 text-indigo-400 border border-indigo-600/20 hover:bg-indigo-600/20 hover:text-indigo-300 transition-all text-xs font-semibold cursor-pointer"
@@ -298,7 +298,7 @@ export function VideoPlayer({ media, initialProgress, streamToken, userId }: Vid
           </div>
 
           <p className="text-[10px] text-foreground/30 mt-2 font-medium leading-relaxed">
-            💡 <strong>Windows/Mac Tip:</strong> If clicking doesn&apos;t open your player, simply click <strong>Copy Stream Link</strong>, open your player (VLC/PotPlayer), press <strong>Ctrl+U</strong> (or <strong>Command+U</strong> on Mac), paste the link, and hit play.
+            💡 <strong>Tip:</strong> Clicking <strong>Play in Desktop Player</strong> downloads a temporary playlist file. Open this file to start playback instantly inside your default media player (VLC/PotPlayer).
           </p>
         </div>
       )}
