@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { GlassCard } from "@/components/ui/GlassCard";
 import { Play } from "lucide-react";
 import type { Media } from "@/repositories/media";
 import { useSelection } from "@/providers/SelectionProvider";
@@ -32,97 +31,140 @@ export function MediaCard({ media }: MediaCardProps) {
 
   return (
     <Link href={href} onClick={handleClick} className="block group relative">
-      <GlassCard className={`relative overflow-hidden flex flex-col justify-between aspect-video rounded-xl p-0 bg-card/10 hover:bg-card/25 border transition-all duration-300 cursor-pointer h-full ${
-        isSelected ? "border-brand-primary/80 ring-2 ring-brand-primary/50" : "border-border/40"
-      }`}>
-        {/* Checkbox Overlay */}
-        <div 
+      <div
+        className="relative overflow-hidden flex flex-col justify-between aspect-video rounded-2xl transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] cursor-pointer h-full group-hover:scale-[1.02]"
+        style={{
+          background: isSelected
+            ? "rgba(229,9,20,0.08)"
+            : "rgba(255,255,255,0.04)",
+          border: isSelected
+            ? "1px solid rgba(229,9,20,0.5)"
+            : "1px solid rgba(255,255,255,0.08)",
+          boxShadow: isSelected
+            ? "0 0 0 2px rgba(229,9,20,0.25), 0 4px 24px rgba(0,0,0,0.4)"
+            : "0 4px 24px rgba(0,0,0,0.4)",
+        }}
+      >
+        {/* Selection Checkbox */}
+        <div
           onClick={handleCheckboxClick}
-          className={`absolute top-3 left-3 z-30 transition-opacity duration-200 ${
-            isSelectionMode ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          className={`absolute top-2.5 left-2.5 z-30 transition-all duration-200 ${
+            isSelectionMode ? "opacity-100 scale-100" : "opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100"
           }`}
         >
-          <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${
-            isSelected 
-              ? "bg-brand-primary border-brand-primary text-white" 
-              : "bg-black/60 border-white/30 text-transparent hover:border-white/60"
-          }`}>
-            <svg className="h-3.5 w-3.5 fill-none stroke-current stroke-[2.5]" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
+          <div
+            className="h-5 w-5 rounded-md flex items-center justify-center transition-all duration-200 cursor-pointer"
+            style={{
+              background: isSelected ? "rgba(229,9,20,1)" : "rgba(0,0,0,0.65)",
+              border: isSelected ? "1px solid rgba(229,9,20,0.8)" : "1px solid rgba(255,255,255,0.25)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+            }}
+          >
+            {isSelected && (
+              <svg className="h-3 w-3 fill-none stroke-white stroke-[2.5]" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
           </div>
         </div>
 
-        {media.posterUrl ? (
+        {/* Poster Image */}
+        {media.posterUrl && (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={media.posterUrl}
               alt={media.title}
-              className="absolute inset-0 w-full h-full object-cover rounded-xl transition-transform duration-500 group-hover:scale-105"
+              className="absolute inset-0 w-full h-full object-cover rounded-2xl transition-transform duration-500 group-hover:scale-[1.05]"
               loading="lazy"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent rounded-xl z-10" />
+            <div
+              className="absolute inset-0 rounded-2xl"
+              style={{
+                background:
+                  "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.0) 100%)",
+              }}
+            />
           </>
-        ) : null}
+        )}
 
-        {/* Play icon overlay on hover (only when not in selection mode) */}
+        {/* Play overlay on hover */}
         {!isSelectionMode && (
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center rounded-xl z-20">
-            <div className="h-10 w-10 rounded-full bg-brand-primary text-white flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform duration-300 shadow-lg">
-              <Play className="h-5 w-5 fill-white ml-0.5" />
+          <div
+            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-250 flex items-center justify-center rounded-2xl z-20"
+            style={{ background: "rgba(0,0,0,0.35)" }}
+          >
+            <div
+              className="h-10 w-10 rounded-full flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform duration-300 shadow-xl"
+              style={{
+                background: "rgba(255,255,255,0.92)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+              }}
+            >
+              <Play className="h-4 w-4 fill-black text-black ml-0.5" />
             </div>
           </div>
         )}
 
-        <div className="flex flex-col h-full justify-between p-4 z-10 relative">
+        {/* Content */}
+        <div className="flex flex-col h-full justify-between p-3.5 z-10 relative">
           <div className="flex justify-between items-start gap-2">
-            <span className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border ${
-              media.posterUrl 
-                ? "bg-black/60 border-white/10 text-white" 
-                : "bg-card/75 border-border/30 text-foreground/80"
-            }`}>
-              {media.mediaType === "tv-show"
-                ? "Episode"
-                : media.mediaType === "anime"
-                ? "Anime"
-                : "Movie"}
+            <span
+              className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full"
+              style={{
+                background: media.posterUrl ? "rgba(0,0,0,0.65)" : "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                color: media.posterUrl ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.6)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+              }}
+            >
+              {media.mediaType === "tv-show" ? "Episode" : media.mediaType === "anime" ? "Anime" : "Movie"}
             </span>
 
             {media.mediaType === "tv-show" && (
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                media.posterUrl
-                  ? "bg-brand-primary border border-brand-primary/20 text-white shadow-md"
-                  : "bg-brand-primary/15 border border-brand-primary/20 text-brand-primary"
-              }`}>
+              <span
+                className="text-[9px] font-bold px-1.5 py-0.5 rounded-full font-mono"
+                style={{
+                  background: "rgba(229,9,20,0.85)",
+                  color: "white",
+                }}
+              >
                 S{String(media.season ?? 0).padStart(2, "0")}E{String(media.episode ?? 0).padStart(2, "0")}
               </span>
             )}
           </div>
 
-          <div className="mt-4 space-y-1">
-            <h4 className={`font-semibold leading-snug line-clamp-2 text-xs md:text-sm ${
-              media.posterUrl ? "text-white drop-shadow-md" : "text-foreground"
-            }`}>
+          <div className="mt-auto space-y-0.5">
+            <h4
+              className={`font-semibold leading-snug line-clamp-2 text-xs md:text-sm tracking-[-0.01em] ${
+                media.posterUrl ? "text-white drop-shadow-md" : "text-white/80"
+              }`}
+            >
               {media.mediaType === "tv-show" && media.series ? media.series : media.title}
             </h4>
             {media.mediaType === "tv-show" && media.title && (
-              <p className={`text-[10px] truncate font-normal ${
-                media.posterUrl ? "text-white/70 drop-shadow-sm" : "text-foreground/40"
-              }`}>
+              <p
+                className={`text-[10px] truncate font-normal ${
+                  media.posterUrl ? "text-white/55" : "text-white/35"
+                }`}
+              >
                 {media.title}
               </p>
             )}
             {media.fileSize && (
-              <p className={`text-[9px] font-mono pt-0.5 ${
-                media.posterUrl ? "text-white/50" : "text-foreground/35"
-              }`}>
-                {(media.fileSize / (1024 * 1024 * 1024)).toFixed(2)} GB
+              <p
+                className={`text-[9px] font-mono ${
+                  media.posterUrl ? "text-white/40" : "text-white/25"
+                }`}
+              >
+                {(media.fileSize / 1073741824).toFixed(1)} GB
               </p>
             )}
           </div>
         </div>
-      </GlassCard>
+      </div>
     </Link>
   );
 }

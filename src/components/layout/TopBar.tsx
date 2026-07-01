@@ -28,7 +28,6 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
 
-  // Avoid hydration mismatch and fetch user session
   useEffect(() => {
     const handle = requestAnimationFrame(() => {
       setMounted(true);
@@ -58,7 +57,6 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
     }
   };
 
-  // Find page title from path
   const getPageTitle = () => {
     if (pathname === "/") return "Home";
     const item = navigationItems.find((n) => n.href === pathname);
@@ -66,59 +64,68 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-border bg-background/40 px-6 backdrop-blur-md">
+    <header
+      className="sticky top-0 z-30 flex h-14 w-full items-center justify-between px-5"
+      style={{
+        background: "rgba(8, 8, 15, 0.75)",
+        backdropFilter: "blur(40px) saturate(180%)",
+        WebkitBackdropFilter: "blur(40px) saturate(180%)",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+        boxShadow: "0 1px 0 rgba(255, 255, 255, 0.04)",
+      }}
+    >
       {/* Left side: Hamburger (mobile) & Title */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3.5">
         <button
           onClick={onOpenSidebar}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-border text-foreground/80 hover:text-foreground md:hidden"
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06] border border-white/[0.09] text-white/70 hover:text-white hover:bg-white/[0.10] transition-all duration-200 md:hidden"
           aria-label="Open sidebar"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-4.5 w-4.5" />
         </button>
         <div>
-          <h1 className="text-lg font-semibold tracking-tight text-foreground md:text-xl">
+          <h1 className="text-base font-semibold tracking-[-0.02em] text-white/90 md:text-[17px]">
             {getPageTitle()}
           </h1>
         </div>
       </div>
 
-      {/* Right side: Search placeholder, Theme toggle, Avatar */}
-      <div className="flex items-center gap-4">
-        {/* Search Input wrapped in Suspense */}
+      {/* Right side */}
+      <div className="flex items-center gap-2.5">
+        {/* Search — pill shape, glass inset */}
         <Suspense fallback={
-          <div className="relative hidden w-64 sm:block animate-pulse">
-            <div className="w-full h-8 rounded-xl bg-card/45 border border-border/30" />
+          <div className="relative hidden w-56 sm:block">
+            <div className="w-full h-8 rounded-full bg-white/[0.05] border border-white/[0.08] animate-pulse" />
           </div>
         }>
           <SearchInputWrapper />
         </Suspense>
 
-        {/* Theme Toggle Button */}
+        {/* Theme Toggle */}
         {mounted && (
           <button
             onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card/30 text-foreground/80 hover:bg-card/60 hover:text-foreground transition-all duration-200"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] border border-white/[0.09] text-white/60 hover:bg-white/[0.10] hover:text-white/90 transition-all duration-200"
             title={`Switch to ${resolvedTheme === "dark" ? "Light" : "Dark"} Mode`}
           >
             {resolvedTheme === "dark" ? (
-              <Sun className="h-4.5 w-4.5" />
+              <Sun className="h-4 w-4" />
             ) : (
-              <Moon className="h-4.5 w-4.5" />
+              <Moon className="h-4 w-4" />
             )}
           </button>
         )}
 
-        {/* User profile avatar dropdown */}
+        {/* User Avatar / Dropdown */}
         {mounted && user ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card/30 text-foreground/80 hover:bg-card/60 transition-all duration-200 cursor-pointer outline-none">
-                <Avatar size="sm" className="h-8 w-8">
+              <button className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] border border-white/[0.09] hover:bg-white/[0.10] transition-all duration-200 cursor-pointer outline-none">
+                <Avatar size="sm" className="h-7 w-7">
                   {user.avatarUrl && (
                     <AvatarImage src={user.avatarUrl} alt={user.displayName || user.email} />
                   )}
-                  <AvatarFallback className="bg-brand-primary/10 text-brand-primary text-xs font-semibold">
+                  <AvatarFallback className="bg-brand-primary/20 text-brand-primary text-[10px] font-bold">
                     {user.displayName
                       ? user.displayName.slice(0, 2).toUpperCase()
                       : user.email.slice(0, 2).toUpperCase()}
@@ -126,29 +133,37 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
                 </Avatar>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-card border-border">
+            <DropdownMenuContent
+              align="end"
+              className="w-52 border-white/[0.09]"
+              style={{
+                background: "rgba(20, 20, 30, 0.95)",
+                backdropFilter: "blur(40px)",
+                WebkitBackdropFilter: "blur(40px)",
+              }}
+            >
               <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none text-foreground">
+                <div className="flex flex-col space-y-0.5">
+                  <p className="text-sm font-semibold leading-none text-white/90">
                     {user.displayName || "User"}
                   </p>
-                  <p className="text-xs leading-none text-foreground/60 truncate">
+                  <p className="text-xs leading-none text-white/40 truncate mt-1">
                     {user.email}
                   </p>
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuSeparator className="bg-white/[0.07]" />
               <DropdownMenuItem
                 onClick={handleSignOut}
-                className="text-red-500 focus:bg-red-500/10 focus:text-red-500 cursor-pointer"
+                className="text-red-400 focus:bg-red-500/10 focus:text-red-400 cursor-pointer"
               >
                 Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card/30 text-foreground/80">
-            <UserIcon className="h-4.5 w-4.5" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] border border-white/[0.09] text-white/40">
+            <UserIcon className="h-4 w-4" />
           </div>
         )}
       </div>
@@ -165,6 +180,7 @@ function SearchInputWrapper() {
 function SearchInput({ initialQuery }: { initialQuery: string }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
+  const [focused, setFocused] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,14 +190,25 @@ function SearchInput({ initialQuery }: { initialQuery: string }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="relative hidden w-64 sm:block">
-      <Search className="absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-foreground/40" />
+    <form onSubmit={handleSubmit} className="relative hidden w-56 sm:block">
+      <Search
+        className={`absolute top-1/2 left-3.5 h-3.5 w-3.5 -translate-y-1/2 transition-colors duration-200 ${
+          focused ? "text-white/70" : "text-white/30"
+        }`}
+      />
       <input
         type="text"
-        placeholder="Search movies, shows..."
+        placeholder="Search…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        className="w-full rounded-xl border border-border bg-card/50 py-1.5 pr-4 pl-10 text-sm text-foreground placeholder-foreground/40 outline-none transition-all duration-200 focus:border-brand-primary/80"
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        className="w-full rounded-full py-1.5 pr-4 pl-9 text-sm text-white/90 placeholder-white/30 outline-none transition-all duration-200"
+        style={{
+          background: focused ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.05)",
+          border: `1px solid ${focused ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.08)"}`,
+          boxShadow: focused ? "0 0 0 3px rgba(229,9,20,0.12)" : "none",
+        }}
       />
     </form>
   );

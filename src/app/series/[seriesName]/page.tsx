@@ -18,7 +18,7 @@ function formatRuntime(seconds: number | null | undefined): string {
 
 function formatFileSize(bytes: number | null | undefined): string {
   if (!bytes) return "";
-  const gb = bytes / (1024 ** 3);
+  const gb = bytes / 1024 ** 3;
   return `${gb.toFixed(2)} GB`;
 }
 
@@ -28,7 +28,6 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
 
   const supabase = await createClient();
 
-  // Fetch all episodes for this series
   const { data: episodes, error } = await supabase
     .from("media_library")
     .select("*")
@@ -36,28 +35,27 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
     .order("season", { ascending: true })
     .order("episode", { ascending: true });
 
-  if (error || !episodes || episodes.length === 0) {
-    notFound();
-  }
+  if (error || !episodes || episodes.length === 0) notFound();
 
-  // Use first episode for show-level metadata
   const showMeta = episodes[0];
   const backdropUrl = showMeta.backdrop_url;
   const posterUrl = showMeta.poster_url;
   const overview = showMeta.overview;
   const displayTitle = showMeta.series || showMeta.title;
 
-  // Group by season
   const seasonMap: Record<number, typeof episodes> = {};
   for (const ep of episodes) {
     const s = ep.season ?? 1;
     if (!seasonMap[s]) seasonMap[s] = [];
     seasonMap[s].push(ep);
   }
-  const seasons = Object.keys(seasonMap).map(Number).sort((a, b) => a - b);
+  const seasons = Object.keys(seasonMap)
+    .map(Number)
+    .sort((a, b) => a - b);
 
-  // Fetch watch progress for user
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const progressMap: Record<string, { position: number; completed: boolean }> = {};
   let isInWatchlist = false;
 
@@ -72,7 +70,6 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
       progressMap[p.media_id] = { position: p.playback_position, completed: p.completed };
     }
 
-    // Check if this show is currently in the user's watchlist
     const { data: watchlistEntry } = await supabase
       .from("watchlist")
       .select("id")
@@ -82,68 +79,113 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
     isInWatchlist = !!watchlistEntry;
   }
 
-  // Find first unwatched episode for the main Play button
-  const firstUnwatched = episodes.find((ep) => !progressMap[ep.id]?.completed) || episodes[0];
+  const firstUnwatched =
+    episodes.find((ep) => !progressMap[ep.id]?.completed) || episodes[0];
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Hero */}
-      <div className="relative w-full" style={{ height: "60vh", minHeight: "400px" }}>
+    <div className="min-h-screen text-white" style={{ background: "#08080f" }}>
+      {/* ── Hero ───────────────────────────────────────────── */}
+      <div className="relative w-full" style={{ height: "62vh", minHeight: "420px" }}>
         {backdropUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={backdropUrl}
             alt={displayTitle}
             className="absolute inset-0 w-full h-full object-cover"
+            style={{ opacity: 0.4 }}
           />
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-black" />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(ellipse 80% 60% at 60% 20%, rgba(99,102,241,0.12) 0%, transparent 60%)",
+            }}
+          />
         )}
 
-        {/* Gradient overlays */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/30" />
+        {/* Gradient layers */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to right, rgba(8,8,15,0.96) 0%, rgba(8,8,15,0.65) 50%, rgba(8,8,15,0.1) 100%)",
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(8,8,15,1) 0%, rgba(8,8,15,0.4) 40%, transparent 70%)",
+          }}
+        />
 
         {/* Back button */}
-        <Link
-          href="/"
-          className="absolute top-6 left-6 flex items-center gap-2 text-white/80 hover:text-white transition-colors text-sm z-10"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Back
-        </Link>
+        <div className="absolute top-6 left-6 z-10">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium text-white/75 hover:text-white transition-all duration-200"
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border: "1px solid rgba(255,255,255,0.12)",
+            }}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Browse
+          </Link>
+        </div>
 
         {/* Hero content */}
-        <div className="absolute bottom-0 left-0 right-0 p-8 md:p-12 z-10">
-          <div className="flex gap-6 items-end max-w-5xl">
-            {/* Poster */}
+        <div className="absolute bottom-0 left-0 right-0 p-8 md:p-14 z-10">
+          <div className="flex gap-7 items-end max-w-5xl">
             {posterUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={posterUrl}
                 alt={displayTitle}
-                className="hidden md:block w-32 h-48 object-cover rounded-xl shadow-2xl border border-white/10 flex-shrink-0"
+                className="hidden md:block w-36 h-[216px] object-cover flex-shrink-0"
+                style={{
+                  borderRadius: "16px",
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  boxShadow: "0 24px 60px -12px rgba(0,0,0,0.8)",
+                }}
               />
             )}
-            <div className="flex-1 space-y-3">
-              <div className="flex items-center gap-3">
-                <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                  showMeta.media_type === "anime"
-                    ? "bg-purple-500/80 border-purple-400/20 text-white"
-                    : "bg-blue-500/80 border-blue-400/20 text-white"
-                }`}>
+            <div className="flex-1 space-y-3.5">
+              <div className="flex items-center gap-2.5">
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                    showMeta.media_type === "anime"
+                      ? "bg-purple-500/80 text-white"
+                      : "bg-blue-500/80 text-white"
+                  }`}
+                >
                   {showMeta.media_type === "anime" ? "Anime" : "TV Show"}
                 </span>
-                <span className="text-white/50 text-xs">{episodes.length} Episode{episodes.length !== 1 ? "s" : ""}</span>
+                <span className="text-white/40 text-xs">
+                  {episodes.length} Episode{episodes.length !== 1 ? "s" : ""}
+                </span>
               </div>
-              <h1 className="text-3xl md:text-5xl font-extrabold text-white leading-tight drop-shadow-2xl">{displayTitle}</h1>
+              <h1
+                className="text-3xl md:text-5xl font-black text-white leading-[1.05] tracking-[-0.03em] drop-shadow-2xl"
+              >
+                {displayTitle}
+              </h1>
               {overview && (
-                <p className="text-white/75 text-sm md:text-base max-w-xl leading-relaxed line-clamp-3">{overview}</p>
+                <p className="text-white/65 text-sm md:text-[15px] max-w-xl leading-relaxed line-clamp-2">
+                  {overview}
+                </p>
               )}
               <div className="flex items-center gap-3 pt-1">
                 <Link
                   href={`/watch/${firstUnwatched.id}`}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-white text-black rounded-lg font-bold text-sm hover:bg-white/90 transition-all"
+                  className="inline-flex items-center gap-2 px-7 py-2.5 rounded-2xl text-sm font-bold text-black hover:opacity-90 transition-all duration-200 shadow-lg"
+                  style={{
+                    background: "rgba(255,255,255,0.95)",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+                  }}
                 >
                   <Play className="h-4 w-4 fill-black" />
                   Play
@@ -161,12 +203,15 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
         </div>
       </div>
 
-      {/* Episodes section */}
-      <div className="max-w-5xl mx-auto px-6 md:px-12 py-8 space-y-6">
+      {/* ── Episodes ──────────────────────────────────────── */}
+      <div className="max-w-5xl mx-auto px-6 md:px-14 py-8 space-y-8">
         {seasons.map((season) => (
           <div key={season} className="space-y-3">
             {seasons.length > 1 && (
-              <h2 className="text-lg font-bold text-white/90 border-b border-white/10 pb-2">
+              <h2
+                className="text-base font-semibold text-white/70 tracking-[-0.01em] pb-2"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+              >
                 Season {season}
               </h2>
             )}
@@ -174,9 +219,10 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
               {seasonMap[season].map((ep) => {
                 const prog = progressMap[ep.id];
                 const runtime = ep.runtime;
-                const progressPct = prog && runtime && runtime > 0
-                  ? Math.min(100, (prog.position / runtime) * 100)
-                  : 0;
+                const progressPct =
+                  prog && runtime && runtime > 0
+                    ? Math.min(100, (prog.position / runtime) * 100)
+                    : 0;
 
                 return (
                   <EpisodeRow

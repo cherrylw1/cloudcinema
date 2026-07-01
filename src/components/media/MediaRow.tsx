@@ -25,15 +25,28 @@ export function MediaRow({ title, items, variant = "portrait" }: MediaRowProps) 
 
   return (
     <div className="space-y-3 group/row">
-      <h3 className="text-base font-semibold text-white/90 px-0">{title}</h3>
+      {/* Section header with accent pip */}
+      <div className="flex items-center gap-3">
+        <span className="block h-4 w-[3px] rounded-full bg-brand-primary opacity-80" />
+        <h3 className="text-[15px] font-semibold text-white/90 tracking-tight">{title}</h3>
+      </div>
+
       <div className="relative">
-        {/* Left Arrow */}
+        {/* Left scroll arrow */}
         <button
           onClick={() => scroll("left")}
-          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-20 h-10 w-10 rounded-full bg-black/70 border border-white/20 text-white flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity duration-200 hover:bg-black/90 cursor-pointer"
+          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 h-9 w-9 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-all duration-200 hover:scale-110 cursor-pointer"
+          style={{
+            background: "rgba(20,20,30,0.85)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            border: "1px solid rgba(255,255,255,0.14)",
+            color: "white",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+          }}
           aria-label="Scroll left"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="h-4 w-4" />
         </button>
 
         {/* Scrollable row */}
@@ -43,19 +56,35 @@ export function MediaRow({ title, items, variant = "portrait" }: MediaRowProps) 
           style={{ scrollSnapType: "x mandatory" }}
         >
           {items.map((media) => (
-            <div key={media.id} className={variant === "portrait" ? "w-48 sm:w-52 flex-shrink-0" : "w-72 sm:w-80 flex-shrink-0"} style={{ scrollSnapAlign: "start" }}>
+            <div
+              key={media.id}
+              className={
+                variant === "portrait"
+                  ? "w-44 sm:w-48 flex-shrink-0"
+                  : "w-72 sm:w-80 flex-shrink-0"
+              }
+              style={{ scrollSnapAlign: "start" }}
+            >
               <SeriesCard media={media} horizontal={variant === "portrait"} />
             </div>
           ))}
         </div>
 
-        {/* Right Arrow */}
+        {/* Right scroll arrow */}
         <button
           onClick={() => scroll("right")}
-          className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-20 h-10 w-10 rounded-full bg-black/70 border border-white/20 text-white flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity duration-200 hover:bg-black/90 cursor-pointer"
+          className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 h-9 w-9 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-all duration-200 hover:scale-110 cursor-pointer"
+          style={{
+            background: "rgba(20,20,30,0.85)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            border: "1px solid rgba(255,255,255,0.14)",
+            color: "white",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+          }}
           aria-label="Scroll right"
         >
-          <ChevronRight className="h-5 w-5" />
+          <ChevronRight className="h-4 w-4" />
         </button>
       </div>
     </div>
