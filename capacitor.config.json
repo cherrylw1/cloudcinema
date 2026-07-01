@@ -2,11 +2,9 @@
   "appId": "com.cloudcinema.app",
   "appName": "CloudCinema",
   "webDir": "public",
+  "appendUserAgent": "CloudCinemaAndroid",
   "server": {
-    "url": "https://cloudcinema.vercel.app",
+    "url": "https://cloudcinema.vercel.app?platform=app",
     "cleartext": true
-  },
-  "android": {
-    "appendUserAgent": "CloudCinemaAndroid"
   }
 }

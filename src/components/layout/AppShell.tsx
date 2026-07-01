@@ -17,9 +17,19 @@ export function AppShell({ children }: AppShellProps) {
   const router = useRouter();
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("platform") === "app" || window.location.href.includes("platform=app")) {
+        localStorage.setItem("platform", "app");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     const isNative = typeof window !== "undefined" && (
       ((window as any).Capacitor && (window as any).Capacitor.isNativePlatform()) ||
-      (typeof navigator !== "undefined" && (navigator.userAgent.includes("CloudCinemaAndroid") || navigator.userAgent.includes("CloudCinemaIOS")))
+      (typeof navigator !== "undefined" && (navigator.userAgent.includes("CloudCinemaAndroid") || navigator.userAgent.includes("CloudCinemaIOS"))) ||
+      localStorage.getItem("platform") === "app"
     );
     if (!isNative) return;
 

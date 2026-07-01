@@ -60,7 +60,8 @@ export class SupabaseAuthRepository implements AuthRepository {
     
     const isNative = typeof window !== "undefined" && (
       ((window as any).Capacitor && (window as any).Capacitor.isNativePlatform()) ||
-      (typeof navigator !== "undefined" && (navigator.userAgent.includes("CloudCinemaAndroid") || navigator.userAgent.includes("CloudCinemaIOS")))
+      (typeof navigator !== "undefined" && (navigator.userAgent.includes("CloudCinemaAndroid") || navigator.userAgent.includes("CloudCinemaIOS"))) ||
+      localStorage.getItem("platform") === "app"
     );
     const redirectTo = isNative 
       ? `${origin}/api/auth/google/callback?source=app` 
