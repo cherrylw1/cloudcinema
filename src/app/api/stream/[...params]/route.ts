@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/clients/supabase/server";
+import { createAdminClient } from "@/clients/supabase/admin";
 import { google } from "googleapis";
 import { env } from "@/config/env";
 import { Readable } from "stream";
@@ -28,14 +29,14 @@ export async function GET(
     return NextResponse.json({ error: "Missing media identifier." }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const adminSupabase = createAdminClient();
   let isAuthorized = false;
 
   // 2. Validate token (path-based) or check cookie session
   if (token && uid) {
     if (verifyStreamToken(id, uid, token)) {
       // Validate that the user exists and is approved in the database
-      const { data: profile } = await supabase
+      const { data: profile } = await adminSupabase
         .from("profiles")
         .select("is_approved")
         .eq("id", uid)
@@ -48,6 +49,7 @@ export async function GET(
   }
 
   if (!isAuthorized) {
+    const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
@@ -64,8 +66,8 @@ export async function GET(
     }
   }
 
-  // 4. Fetch the Drive file ID and metadata from the media library database
-  const { data: media, error: dbError } = await supabase
+  // 4. Fetch the Drive file ID and metadata from the media library database (using adminSupabase to bypass RLS)
+  const { data: media, error: dbError } = await adminSupabase
     .from("media_library")
     .select("drive_file_id, processed_drive_file_id, mime_type, file_size")
     .eq("id", id)
