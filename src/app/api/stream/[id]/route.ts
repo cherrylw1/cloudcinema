@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/clients/supabase/server";
-import { google } from "googleapis";
 import { env } from "@/config/env";
-import { Readable } from "stream";
 
-// Dynamic routing config for binary file piping
+export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 export async function GET(
@@ -54,31 +52,50 @@ export async function GET(
   let fileSize = media.file_size;
 
   try {
-    // 5. Initialize the Google Drive Client
-    const oauth2Client = new google.auth.OAuth2(
-      env.googleClientId,
-      env.googleClientSecret,
-      env.googleRedirectUri
-    );
-
-    oauth2Client.setCredentials({
-      refresh_token: env.googleRefreshToken,
+    // 5. Get access token from Google OAuth endpoint using fetch (Edge-safe)
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: env.googleClientId,
+        client_secret: env.googleClientSecret,
+        refresh_token: env.googleRefreshToken,
+        grant_type: "refresh_token",
+      }),
     });
-
-    const drive = google.drive({ version: "v3", auth: oauth2Client });
-
-    if (paramDriveFileId) {
-      const meta = await drive.files.get({
-        fileId,
-        fields: "size",
-      });
-      fileSize = meta.data.size ? parseInt(meta.data.size, 10) : null;
+    
+    if (!tokenRes.ok) {
+      throw new Error(`Failed to refresh Google token: ${tokenRes.statusText}`);
+    }
+    
+    const tokenData = await tokenRes.json();
+    const accessToken = tokenData.access_token;
+    if (!accessToken) {
+      throw new Error("Access token not found in Google response.");
     }
 
-    // 6. Define fixed chunk size cap: 8MB
-    const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB
+    // 6. Get file size dynamically if not present or if streaming a variant
+    if (paramDriveFileId || !fileSize) {
+      const metaRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?fields=size`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+      if (metaRes.ok) {
+        const meta = await metaRes.json();
+        fileSize = meta.size ? parseInt(meta.size, 10) : null;
+      }
+    }
 
-    // 7. Parse the Range header and clamp the chunk size bounds
+    // 7. Define fixed chunk size cap: 64MB (Large buffer for smooth streaming under Edge runtime)
+    const CHUNK_SIZE = 64 * 1024 * 1024; // 64MB
+
+    // 8. Parse the Range header and clamp the chunk size bounds
     const rangeHeader = request.headers.get("range");
 
     let start = 0;
@@ -110,33 +127,26 @@ export async function GET(
 
     const contentLength = end - start + 1;
 
-    // 8. Fetch byte chunk stream from Google Drive
-    const driveStreamRes = await drive.files.get(
-      {
-        fileId,
-        alt: "media",
-      },
+    // 9. Fetch byte chunk stream from Google Drive using standard fetch (Edge compatible)
+    const driveRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
       {
         headers: {
+          Authorization: `Bearer ${accessToken}`,
           Range: `bytes=${start}-${end}`,
         },
-        responseType: "stream",
       }
     );
 
-    const stream = driveStreamRes.data as unknown as Readable;
+    if (!driveRes.ok) {
+      throw new Error(`Google Drive Alt Media request failed: ${driveRes.statusText}`);
+    }
 
-    // Convert standard Node stream to web stream for Next.js response context
-    const webStream = new ReadableStream({
-      start(controller) {
-        stream.on("data", (chunk) => controller.enqueue(chunk));
-        stream.on("end", () => controller.close());
-        stream.on("error", (err) => controller.error(err));
-      },
-      cancel() {
-        stream.destroy();
-      }
-    });
+    // Pass the body stream from Google Drive directly back to client
+    const webStream = driveRes.body;
+    if (!webStream) {
+      throw new Error("No readable stream received from Google Drive.");
+    }
 
     const responseHeaders: Record<string, string> = {
       "Accept-Ranges": "bytes",
@@ -154,7 +164,7 @@ export async function GET(
       headers: responseHeaders,
     });
   } catch (err) {
-    console.error(`[Streaming Proxy] Failed to stream file ${fileId}:`, err);
+    console.error(`[Streaming Proxy Edge] Failed to stream file ${fileId}:`, err);
     return NextResponse.json({ error: "Failed to initialize stream." }, { status: 500 });
   }
 }
