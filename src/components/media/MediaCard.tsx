@@ -28,8 +28,10 @@ export function MediaCard({ media }: MediaCardProps) {
     toggleSelect(media.id);
   };
 
+  const href = media.mediaType === "movie" ? `/movies/${media.id}` : `/watch/${media.id}`;
+
   return (
-    <Link href={`/watch/${media.id}`} onClick={handleClick} className="block group relative">
+    <Link href={href} onClick={handleClick} className="block group relative">
       <GlassCard className={`relative overflow-hidden flex flex-col justify-between aspect-video rounded-xl p-0 bg-card/10 hover:bg-card/25 border transition-all duration-300 cursor-pointer h-full ${
         isSelected ? "border-brand-primary/80 ring-2 ring-brand-primary/50" : "border-border/40"
       }`}>

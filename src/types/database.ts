@@ -170,6 +170,26 @@ export interface Database {
           updated_at?: string
         }
       }
+      watchlist: {
+        Row: {
+          id: string
+          user_id: string
+          media_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          media_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          media_id?: string | null
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

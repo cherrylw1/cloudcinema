@@ -20,7 +20,7 @@ export function SeriesCard({ media, horizontal = false }: SeriesCardProps) {
 
   if (horizontal) {
     return (
-      <Link href={href} className="block group flex-shrink-0 w-48 sm:w-52">
+      <Link href={href} className="block group w-full">
         <div className="relative overflow-hidden rounded-lg aspect-[2/3] bg-white/5 border border-white/10 transition-all duration-300 group-hover:scale-105 group-hover:z-10 group-hover:shadow-2xl group-hover:shadow-black/60">
           {media.posterUrl ? (
             // eslint-disable-next-line @next/next/no-img-element

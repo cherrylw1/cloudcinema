@@ -119,7 +119,7 @@ export default async function Home() {
   const heroHref = heroItem
     ? (heroItem.mediaType !== "movie" && heroItem.series)
         ? `/series/${encodeURIComponent(heroItem.series!)}`
-        : `/watch/${heroItem.id}`
+        : `/movies/${heroItem.id}`
     : "/";
 
   // Recently added: deduplicate, limit to 30

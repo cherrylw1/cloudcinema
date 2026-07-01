@@ -43,7 +43,7 @@ export function MediaRow({ title, items, variant = "portrait" }: MediaRowProps) 
           style={{ scrollSnapType: "x mandatory" }}
         >
           {items.map((media) => (
-            <div key={media.id} style={{ scrollSnapAlign: "start" }}>
+            <div key={media.id} className={variant === "portrait" ? "w-48 sm:w-52 flex-shrink-0" : "w-72 sm:w-80 flex-shrink-0"} style={{ scrollSnapAlign: "start" }}>
               <SeriesCard media={media} horizontal={variant === "portrait"} />
             </div>
           ))}

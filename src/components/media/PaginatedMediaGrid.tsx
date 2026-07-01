@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Media } from "@/repositories/media";
 import { getMediaListAction } from "@/server/actions/media-actions";
 import { MediaCard } from "@/components/media/MediaCard";
+import { SeriesCard } from "@/components/media/SeriesCard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw } from "lucide-react";
@@ -62,13 +63,17 @@ export function PaginatedMediaGrid({ initialMedia, type, query, emptyStateMessag
     <div className="space-y-8">
       {/* Grid Layout */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {mediaList.map((media) => (
-          <MediaCard key={media.id} media={media} />
-        ))}
+        {mediaList.map((media) =>
+          type === "movie" ? (
+            <SeriesCard key={media.id} media={media} horizontal={true} />
+          ) : (
+            <MediaCard key={media.id} media={media} />
+          )
+        )}
 
         {/* Load More Skeleton Cards */}
         {loading && Array.from({ length: 5 }).map((_, i) => (
-          <div key={`load-more-skeleton-${i}`} className="aspect-video w-full animate-pulse rounded-xl border border-border/20 bg-card/5 p-4 flex flex-col justify-between">
+          <div key={`load-more-skeleton-${i}`} className={`${type === "movie" ? "aspect-[2/3]" : "aspect-video"} w-full animate-pulse rounded-xl border border-border/20 bg-card/5 p-4 flex flex-col justify-between`}>
             <Skeleton className="h-4 w-12 rounded bg-foreground/10" />
             <div className="space-y-2 mt-4">
               <Skeleton className="h-3.5 w-3/4 rounded bg-foreground/10" />

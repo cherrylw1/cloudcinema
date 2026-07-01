@@ -31,6 +31,7 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
   // Automatically exit selection mode when selection is cleared
   useEffect(() => {
     if (selectedIds.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsSelectionMode(false);
     } else {
       setIsSelectionMode(true);

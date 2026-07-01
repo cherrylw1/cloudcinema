@@ -13,6 +13,8 @@ import {
   Tv,
   Sparkles,
   Settings,
+  Bookmark,
+  Heart,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -24,6 +26,8 @@ const iconMap: Record<string, LucideIcon> = {
   Tv,
   Sparkles,
   Settings,
+  Bookmark,
+  Heart,
 };
 
 interface SidebarProps {
@@ -68,7 +72,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navigation Items */}
         <nav className="flex-1 space-y-1.5">
           {navigationItems.map((item) => {
-            const Icon = iconMap[item.icon] || Home;
+            const Icon = typeof item.icon === "string" ? (iconMap[item.icon] || Home) : item.icon;
             const isActive = pathname === item.href;
 
             return (
