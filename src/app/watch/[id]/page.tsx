@@ -3,6 +3,7 @@ import { SupabaseMediaRepository } from "@/repositories/media/supabase-media-rep
 import { SupabaseProgressRepository } from "@/repositories/progress/supabase-progress-repository";
 import { VideoPlayer } from "@/components/media/VideoPlayer";
 import { createClient } from "@/clients/supabase/server";
+import { generateStreamToken } from "@/lib/token";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -21,9 +22,14 @@ export default async function WatchPage({ params }: { params: Promise<{ id: stri
   const { data: { user } } = await supabase.auth.getUser();
   
   let initialProgress = null;
+  let streamToken = "";
+  let userId = "";
+
   if (user) {
     const progressRepository = new SupabaseProgressRepository();
     initialProgress = await progressRepository.getProgress(user.id, media.id);
+    streamToken = generateStreamToken(media.id, user.id);
+    userId = user.id;
   }
 
   const isTv = media.mediaType === "tv-show";
@@ -50,7 +56,12 @@ export default async function WatchPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* Video Player Component */}
-        <VideoPlayer media={media} initialProgress={initialProgress} />
+        <VideoPlayer 
+          media={media} 
+          initialProgress={initialProgress} 
+          streamToken={streamToken}
+          userId={userId}
+        />
       </div>
     </PageContainer>
   );

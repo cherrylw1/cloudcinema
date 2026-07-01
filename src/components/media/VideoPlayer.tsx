@@ -4,10 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import type { Media, AudioVariant, SubtitleTrack } from "@/repositories/media";
 import type { UserProgress } from "@/repositories/progress";
 import { saveProgressAction } from "@/server/actions/progress-actions";
+import { ExternalLink, Copy, Check } from "lucide-react";
 
 interface VideoPlayerProps {
   media: Media;
   initialProgress: UserProgress | null;
+  streamToken: string;
+  userId: string;
 }
 
 function formatLanguage(lang: string | null): string {
@@ -42,7 +45,7 @@ function formatLanguage(lang: string | null): string {
 }
 
 
-export function VideoPlayer({ media, initialProgress }: VideoPlayerProps) {
+export function VideoPlayer({ media, initialProgress, streamToken, userId }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const initialSeekDone = useRef(false);
   const lastSavedTime = useRef<number>(0);
@@ -51,6 +54,27 @@ export function VideoPlayer({ media, initialProgress }: VideoPlayerProps) {
   const [activeMedia] = useState<Media>(media);
   const [selectedAudioVariant, setSelectedAudioVariant] = useState<string>(media.processedDriveFileId || media.driveFileId);
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
+  const [copied, setCopied] = useState(false);
+
+  // Construct absolute stream URL with signed credentials
+  const getStreamUrl = () => {
+    if (typeof window === "undefined") return "";
+    const variantQuery = selectedAudioVariant !== (activeMedia.processedDriveFileId || activeMedia.driveFileId)
+      ? `&driveFileId=${selectedAudioVariant}`
+      : "";
+    return `${window.location.origin}/api/stream/${activeMedia.id}?token=${streamToken}&uid=${userId}${variantQuery}`;
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      const url = getStreamUrl();
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy link:", err);
+    }
+  };
 
   // Trigger transcode process silently in the background on load
   useEffect(() => {
@@ -207,6 +231,60 @@ export function VideoPlayer({ media, initialProgress }: VideoPlayerProps) {
               </select>
             </div>
           )}
+        </div>
+      )}
+
+      {/* External Players Integration */}
+      {typeof window !== "undefined" && (
+        <div className="mt-4 p-4 rounded-xl border border-white/[0.08] bg-zinc-900/40 backdrop-blur-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground/90">Play in External Player</h3>
+              <p className="text-xs text-foreground/45 mt-0.5">
+                If your browser experiences green/purple tints, has no audio, or struggles with 4K HDR playback.
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-2 pt-1">
+            <a 
+              href={`vlc://${getStreamUrl().replace(/^https?:\/\//, "")}`} 
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600/10 text-orange-500 border border-orange-600/20 hover:bg-orange-600/20 hover:text-orange-400 transition-all text-xs font-semibold cursor-pointer"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Play in VLC
+            </a>
+            <a 
+              href={`infuse://x-callback-url/play?url=${encodeURIComponent(getStreamUrl())}`} 
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/10 text-blue-400 border border-blue-600/20 hover:bg-blue-600/20 hover:text-blue-300 transition-all text-xs font-semibold cursor-pointer"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Play in Infuse
+            </a>
+            <a 
+              href={`iina://weblink?url=${encodeURIComponent(getStreamUrl())}`} 
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/10 text-indigo-400 border border-indigo-600/20 hover:bg-indigo-600/20 hover:text-indigo-300 transition-all text-xs font-semibold cursor-pointer"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Play in IINA
+            </a>
+            <button 
+              onClick={handleCopyLink}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/10 text-emerald-400 border border-emerald-600/20 hover:bg-emerald-600/20 hover:text-emerald-300 transition-all text-xs font-semibold cursor-pointer"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  Copied Link!
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5" />
+                  Copy Stream Link
+                </>
+              )}
+            </button>
+          </div>
         </div>
       )}
     </div>

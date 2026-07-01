@@ -3,6 +3,7 @@ import { createClient } from "@/clients/supabase/server";
 import { google } from "googleapis";
 import { env } from "@/config/env";
 import { Readable } from "stream";
+import { verifyStreamToken } from "@/lib/token";
 
 export const dynamic = "force-dynamic";
 
@@ -16,22 +17,44 @@ export async function GET(
     return NextResponse.json({ error: "Missing media identifier." }, { status: 400 });
   }
 
-  // 2. Perform user session verification inside the route
+  const { searchParams } = new URL(request.url);
+  const token = searchParams.get("token");
+  const uid = searchParams.get("uid");
+
   const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+  let isAuthorized = false;
+
+  // 2. Validate token or check cookie session
+  if (token && uid) {
+    if (verifyStreamToken(id, uid, token)) {
+      // Validate that the user exists and is approved in the database
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_approved")
+        .eq("id", uid)
+        .maybeSingle();
+
+      if (profile?.is_approved) {
+        isAuthorized = true;
+      }
+    }
   }
 
-  // 3. Verify the user is approved (is_approved = true)
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("is_approved")
-    .eq("id", user.id)
-    .maybeSingle();
+  if (!isAuthorized) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
 
-  if (!profile || !profile.is_approved) {
-    return NextResponse.json({ error: "Approval pending." }, { status: 403 });
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_approved")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!profile || !profile.is_approved) {
+      return NextResponse.json({ error: "Approval pending." }, { status: 403 });
+    }
   }
 
   // 4. Fetch the Drive file ID and metadata from the media library database
@@ -45,7 +68,6 @@ export async function GET(
     return NextResponse.json({ error: "Media file not found in library." }, { status: 404 });
   }
 
-  const { searchParams } = new URL(request.url);
   const paramDriveFileId = searchParams.get("driveFileId");
 
   const fileId = paramDriveFileId || media.processed_drive_file_id || media.drive_file_id;
