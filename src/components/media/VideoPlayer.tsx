@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import type { Media, AudioVariant, SubtitleTrack } from "@/repositories/media";
 import type { UserProgress } from "@/repositories/progress";
 import { saveProgressAction } from "@/server/actions/progress-actions";
-import { Loader2, AlertCircle } from "lucide-react";
 
 interface VideoPlayerProps {
   media: Media;
@@ -42,33 +41,6 @@ function formatLanguage(lang: string | null): string {
   return mapping[lower] || lang.toUpperCase();
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapDbRowToMedia(row: any): Media {
-  return {
-    id: row.id,
-    driveFileId: row.drive_file_id,
-    title: row.title,
-    series: row.series,
-    season: row.season,
-    episode: row.episode,
-    mediaType: row.media_type,
-    posterUrl: row.poster_url,
-    backdropUrl: row.backdrop_url,
-    runtime: row.runtime,
-    fileSize: row.file_size,
-    tmdbId: row.tmdb_id,
-    mimeType: row.mime_type,
-    dvProfile: row.dv_profile,
-    audioCodec: row.audio_codec,
-    audioStreams: row.audio_streams,
-    subtitleStreams: row.subtitle_streams,
-    processingStatus: row.processing_status,
-    audioVariants: row.audio_variants,
-    subtitleTracks: row.subtitle_tracks,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
 
 export function VideoPlayer({ media, initialProgress }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -76,57 +48,9 @@ export function VideoPlayer({ media, initialProgress }: VideoPlayerProps) {
   const lastSavedTime = useRef<number>(0);
   const seekTargetRef = useRef<number | null>(null);
 
-  const [activeMedia, setActiveMedia] = useState<Media>(media);
-  const [status, setStatus] = useState<string>(media.processingStatus || "none");
+  const [activeMedia] = useState<Media>(media);
   const [selectedAudioVariant, setSelectedAudioVariant] = useState<string>(media.processedDriveFileId || media.driveFileId);
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
-
-
-
-  // Poll processing status if not ready or failed
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-
-    const checkStatus = async () => {
-      try {
-        const res = await fetch(`/api/process/prepare/${media.id}`, { method: "POST" });
-        if (!res.ok) throw new Error("Status check failed");
-        
-        const data = await res.json();
-        const currentStatus = data.status || "none";
-        setStatus(currentStatus);
-
-        if (data.media) {
-          const mapped = mapDbRowToMedia(data.media);
-          setActiveMedia(mapped);
-          if (currentStatus === "ready") {
-            setSelectedAudioVariant(mapped.processedDriveFileId || mapped.driveFileId);
-          }
-        }
-
-        if (currentStatus === "ready" || currentStatus === "failed") {
-          if (intervalId) {
-            clearInterval(intervalId);
-            intervalId = null;
-          }
-        }
-      } catch (err) {
-        console.error("[VideoPlayer] Status polling error:", err);
-      }
-    };
-
-    // Initial check immediately
-    checkStatus();
-
-    // Start polling if not completed
-    if (status === "none" || status === "processing") {
-      intervalId = setInterval(checkStatus, 5000);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [media.id, status]);
 
   // Audio variant selector handler with seamless re-seek
   const handleAudioChange = (driveFileId: string) => {
@@ -203,34 +127,9 @@ export function VideoPlayer({ media, initialProgress }: VideoPlayerProps) {
     };
   }, [activeMedia.id]);
 
-  // Loading and error states UI
-  if (status === "none" || status === "processing") {
-    return (
-      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black/60 border border-white/[0.08] flex flex-col items-center justify-center p-8 shadow-2xl backdrop-blur-md">
-        <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-        <h3 className="text-md font-semibold text-foreground mb-2 flex items-center gap-2">
-          Preparing Media Pipeline
-        </h3>
-        <p className="text-xs text-foreground/60 text-center max-w-md leading-relaxed">
-          Your media is being prepared and optimized for web playback. This involves stripping Dolby Vision green/pink colorspace layers, tonemapping HDR colors to standard Rec.709 SDR, and indexing language tracks. Please wait...
-        </p>
-      </div>
-    );
-  }
-
-  if (status === "failed") {
-    return (
-      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black/60 border border-red-500/20 flex flex-col items-center justify-center p-8 shadow-2xl backdrop-blur-md">
-        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-        <h3 className="text-md font-semibold text-foreground mb-2">Preparation Failed</h3>
-        <p className="text-xs text-foreground/60 text-center max-w-md leading-relaxed">
-          Media preparation failed. Please verify repository secrets are correctly configured or check GitHub Action execution logs.
-        </p>
-      </div>
-    );
-  }
-
-  const streamUrl = `/api/stream/${selectedAudioVariant}`;
+  const streamUrl = selectedAudioVariant === (activeMedia.processedDriveFileId || activeMedia.driveFileId)
+    ? `/api/stream/${activeMedia.id}`
+    : `/api/stream/${activeMedia.id}?driveFileId=${selectedAudioVariant}`;
   const showAudioSelector = activeMedia.audioVariants && activeMedia.audioVariants.length > 1;
   const showSubtitleSelector = activeMedia.subtitleTracks && activeMedia.subtitleTracks.length > 0;
 

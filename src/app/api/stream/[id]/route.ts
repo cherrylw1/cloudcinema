@@ -46,9 +46,12 @@ export async function GET(
     return NextResponse.json({ error: "Media file not found in library." }, { status: 404 });
   }
 
-  const fileId = media.processed_drive_file_id || media.drive_file_id;
-  const mimeType = media.mime_type || "video/mp4";
-  const fileSize = media.file_size;
+  const { searchParams } = new URL(request.url);
+  const paramDriveFileId = searchParams.get("driveFileId");
+
+  const fileId = paramDriveFileId || media.processed_drive_file_id || media.drive_file_id;
+  const mimeType = paramDriveFileId ? "video/mp4" : (media.mime_type || "video/mp4");
+  let fileSize = media.file_size;
 
   try {
     // 5. Initialize the Google Drive Client
@@ -63,6 +66,14 @@ export async function GET(
     });
 
     const drive = google.drive({ version: "v3", auth: oauth2Client });
+
+    if (paramDriveFileId) {
+      const meta = await drive.files.get({
+        fileId,
+        fields: "size",
+      });
+      fileSize = meta.data.size ? parseInt(meta.data.size, 10) : null;
+    }
 
     // 6. Define fixed chunk size cap: 8MB
     const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB
