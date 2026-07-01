@@ -255,6 +255,13 @@ export function VideoPlayer({ media, initialProgress, streamToken, userId }: Vid
               Play in VLC
             </a>
             <a 
+              href={`potplayer://${getStreamUrl()}`} 
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-600/10 text-yellow-500 border border-yellow-600/20 hover:bg-yellow-600/20 hover:text-yellow-400 transition-all text-xs font-semibold cursor-pointer"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Play in PotPlayer
+            </a>
+            <a 
               href={`infuse://x-callback-url/play?url=${encodeURIComponent(getStreamUrl())}`} 
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/10 text-blue-400 border border-blue-600/20 hover:bg-blue-600/20 hover:text-blue-300 transition-all text-xs font-semibold cursor-pointer"
             >
