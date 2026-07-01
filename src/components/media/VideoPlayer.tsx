@@ -52,6 +52,13 @@ export function VideoPlayer({ media, initialProgress }: VideoPlayerProps) {
   const [selectedAudioVariant, setSelectedAudioVariant] = useState<string>(media.processedDriveFileId || media.driveFileId);
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
 
+  // Trigger transcode process silently in the background on load
+  useEffect(() => {
+    fetch(`/api/process/prepare/${media.id}`, { method: "POST" }).catch((err) => {
+      console.error("[VideoPlayer] Silent prepare trigger failed:", err);
+    });
+  }, [media.id]);
+
   // Audio variant selector handler with seamless re-seek
   const handleAudioChange = (driveFileId: string) => {
     if (videoRef.current) {

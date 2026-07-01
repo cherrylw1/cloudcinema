@@ -290,6 +290,10 @@ async function processSingleMedia(
     ? "zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
     : "scale=1920:-2,format=yuv420p";
 
+  const videoCodecStr = isCompatibleVideo && !isHDR
+    ? "-c:v copy"
+    : `-c:v libx264 -preset veryfast -crf 22 -vf "${vfFilters}"`;
+
   // Build audio mapping args dynamically for single-pass transcode
   let extraAudioArgs = "";
   if (shouldStripDovi) {
@@ -308,13 +312,13 @@ async function processSingleMedia(
       `ffmpeg -y -i pipe:0 -an -c:v copy -bsf:v hevc_mp4toannexb -f hevc pipe:1 | ` +
       `dovi_tool remove - -o - | ` +
       `ffmpeg -y -i pipe:0 -headers "Authorization: Bearer ${accessToken}\r\n" -i "${sourceUrl}" ` +
-      `-map 0:v -map 1:a:0 -c:v libx264 -preset veryfast -crf 22 -c:a aac -b:a 192k -vf "${vfFilters}" -movflags +faststart ${outputFilename}${extraAudioArgs}`;
+      `-map 0:v -map 1:a:0 ${videoCodecStr} -c:a aac -b:a 192k -movflags +faststart ${outputFilename}${extraAudioArgs}`;
     
     execSync(pipeCommand, { stdio: "inherit" });
   } else {
-    console.log(`[Shard ${shardIndex}] Running direct H.264 transcode...`);
+    console.log(`[Shard ${shardIndex}] Running transcode pipeline with ${videoCodecStr}...`);
     const transcodeCommand = `ffmpeg -y -headers "Authorization: Bearer ${accessToken}\r\n" -i "${sourceUrl}" ` +
-      `-map 0:v:0 -map 0:a:0 -c:v libx264 -preset veryfast -crf 22 -c:a aac -b:a 192k -vf "${vfFilters}" -movflags +faststart ${outputFilename}${extraAudioArgs}`;
+      `-map 0:v:0 -map 0:a:0 ${videoCodecStr} -c:a aac -b:a 192k -movflags +faststart ${outputFilename}${extraAudioArgs}`;
     
     execSync(transcodeCommand, { stdio: "inherit" });
   }
