@@ -1,16 +1,56 @@
+"use client";
+
 import Link from "next/link";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Play } from "lucide-react";
 import type { Media } from "@/repositories/media";
+import { useSelection } from "@/providers/SelectionProvider";
 
 interface MediaCardProps {
   media: Media;
 }
 
 export function MediaCard({ media }: MediaCardProps) {
+  const { isSelectionMode, selectedIds, toggleSelect } = useSelection();
+  const isSelected = selectedIds.includes(media.id);
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (isSelectionMode) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSelect(media.id);
+    }
+  };
+
+  const handleCheckboxClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleSelect(media.id);
+  };
+
   return (
-    <Link href={`/watch/${media.id}`} className="block group">
-      <GlassCard className="relative overflow-hidden flex flex-col justify-between aspect-video rounded-xl p-0 bg-card/10 hover:bg-card/25 border border-border/40 transition-all duration-300 cursor-pointer h-full">
+    <Link href={`/watch/${media.id}`} onClick={handleClick} className="block group relative">
+      <GlassCard className={`relative overflow-hidden flex flex-col justify-between aspect-video rounded-xl p-0 bg-card/10 hover:bg-card/25 border transition-all duration-300 cursor-pointer h-full ${
+        isSelected ? "border-brand-primary/80 ring-2 ring-brand-primary/50" : "border-border/40"
+      }`}>
+        {/* Checkbox Overlay */}
+        <div 
+          onClick={handleCheckboxClick}
+          className={`absolute top-3 left-3 z-30 transition-opacity duration-200 ${
+            isSelectionMode ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+        >
+          <div className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${
+            isSelected 
+              ? "bg-brand-primary border-brand-primary text-white" 
+              : "bg-black/60 border-white/30 text-transparent hover:border-white/60"
+          }`}>
+            <svg className="h-3.5 w-3.5 fill-none stroke-current stroke-[2.5]" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        </div>
+
         {media.posterUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -24,12 +64,14 @@ export function MediaCard({ media }: MediaCardProps) {
           </>
         ) : null}
 
-        {/* Play icon overlay on hover */}
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center rounded-xl z-20">
-          <div className="h-10 w-10 rounded-full bg-brand-primary text-white flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform duration-300 shadow-lg">
-            <Play className="h-5 w-5 fill-white ml-0.5" />
+        {/* Play icon overlay on hover (only when not in selection mode) */}
+        {!isSelectionMode && (
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center rounded-xl z-20">
+            <div className="h-10 w-10 rounded-full bg-brand-primary text-white flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform duration-300 shadow-lg">
+              <Play className="h-5 w-5 fill-white ml-0.5" />
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex flex-col h-full justify-between p-4 z-10 relative">
           <div className="flex justify-between items-start gap-2">

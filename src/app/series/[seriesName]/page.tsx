@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/clients/supabase/server";
-import { Play, ChevronLeft, Clock, HardDrive } from "lucide-react";
+import { Play, ChevronLeft } from "lucide-react";
 import { SeriesDetailClient } from "./SeriesDetailClient";
+import { EpisodeRow } from "./EpisodeRow";
 
 interface SeriesPageProps {
   params: Promise<{ seriesName: string }>;
@@ -161,73 +162,14 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
                   : 0;
 
                 return (
-                  <Link
+                  <EpisodeRow
                     key={ep.id}
-                    href={`/watch/${ep.id}`}
-                    className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group"
-                  >
-                    {/* Episode thumbnail / number */}
-                    <div className="relative flex-shrink-0">
-                      {ep.backdrop_url || ep.poster_url ? (
-                        <div className="relative w-28 aspect-video rounded-lg overflow-hidden">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={ep.backdrop_url || ep.poster_url || ""}
-                            alt={ep.title}
-                            className="w-full h-full object-cover"
-                          />
-                          {progressPct > 0 && (
-                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/20">
-                              <div className="h-full bg-brand-primary" style={{ width: `${progressPct}%` }} />
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <Play className="h-5 w-5 fill-white text-white" />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="w-28 aspect-video rounded-lg bg-white/10 flex items-center justify-center text-white/30 font-bold text-xl">
-                          {ep.episode ?? "?"}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Episode info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        {ep.episode != null && (
-                          <span className="text-xs text-white/40 font-mono">
-                            {ep.season != null ? `S${String(ep.season).padStart(2, "0")}` : ""}E{String(ep.episode).padStart(2, "0")}
-                          </span>
-                        )}
-                        {prog?.completed && (
-                          <span className="text-[10px] text-green-400 bg-green-400/10 border border-green-400/20 px-1.5 py-0.5 rounded font-medium">Watched</span>
-                        )}
-                      </div>
-                      <p className="text-white font-medium text-sm line-clamp-1">{ep.title}</p>
-                      <div className="flex items-center gap-3 mt-1">
-                        {runtime && (
-                          <span className="text-white/40 text-xs flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {formatRuntime(runtime)}
-                          </span>
-                        )}
-                        {ep.file_size && (
-                          <span className="text-white/40 text-xs flex items-center gap-1">
-                            <HardDrive className="h-3 w-3" />
-                            {formatFileSize(ep.file_size)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Play button */}
-                    <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="h-9 w-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
-                        <Play className="h-4 w-4 fill-white text-white ml-0.5" />
-                      </div>
-                    </div>
-                  </Link>
+                    ep={ep}
+                    progressPct={progressPct}
+                    completed={prog?.completed ?? false}
+                    runtimeStr={formatRuntime(runtime)}
+                    fileSizeStr={formatFileSize(ep.file_size)}
+                  />
                 );
               })}
             </div>

@@ -190,13 +190,17 @@ export class DriveSyncService {
       });
     }
 
-    console.log(`[Sync] Upserting ${upsertPayload.length} media records in batches of 100...`);
-    const upsertChunkSize = 100;
-    for (let i = 0; i < upsertPayload.length; i += upsertChunkSize) {
-      const chunk = upsertPayload.slice(i, i + upsertChunkSize);
+    const newPayload = upsertPayload.filter(
+      (row) => row.drive_file_id && !existingFileIdsSet.has(row.drive_file_id)
+    );
+
+    console.log(`[Sync] Inserting ${newPayload.length} new media records in batches of 100...`);
+    const insertChunkSize = 100;
+    for (let i = 0; i < newPayload.length; i += insertChunkSize) {
+      const chunk = newPayload.slice(i, i + insertChunkSize);
       const { error } = await adminClient
         .from("media_library")
-        .upsert(chunk, { onConflict: "drive_file_id" });
+        .insert(chunk);
 
       if (error) throw error;
     }

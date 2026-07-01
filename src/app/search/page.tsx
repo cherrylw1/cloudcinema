@@ -24,6 +24,7 @@ export default async function SearchPage({
     >
       <div className="space-y-6">
         <PaginatedMediaGrid
+          key={query}
           initialMedia={initialMedia}
           query={query}
           emptyStateMessage={query ? `No results for '${query}'.` : "Type a query in the search bar above to look up movies or TV series."}
