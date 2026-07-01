@@ -169,7 +169,7 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
                 </span>
               </div>
               <h1
-                className="text-3xl md:text-5xl font-black text-white leading-[1.05] tracking-[-0.03em] drop-shadow-2xl"
+                className="text-3xl md:text-5xl font-black text-white leading-[1.05] tracking-[-0.03em] drop-shadow-2xl break-all"
               >
                 {displayTitle}
               </h1>

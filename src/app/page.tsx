@@ -163,7 +163,7 @@ export default async function Home() {
               </span>
 
               {/* Title */}
-              <h1 className="text-3xl sm:text-4xl md:text-6xl font-black text-white leading-tight drop-shadow-2xl">
+              <h1 className="text-3xl sm:text-4xl md:text-6xl font-black text-white leading-tight drop-shadow-2xl break-all">
                 {heroTitle}
               </h1>
 

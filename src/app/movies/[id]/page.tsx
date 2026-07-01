@@ -154,7 +154,7 @@ export default async function MovieDetailsPage({ params }: MoviePageProps) {
           >
             {/* Title */}
             <h1
-              className="text-3xl md:text-5xl font-black text-white leading-[1.05] tracking-[-0.03em]"
+              className="text-3xl md:text-5xl font-black text-white leading-[1.05] tracking-[-0.03em] break-all"
             >
               {displayTitle}
             </h1>
