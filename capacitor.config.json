@@ -5,5 +5,8 @@
   "server": {
     "url": "https://cloudcinema.vercel.app",
     "cleartext": true
+  },
+  "android": {
+    "appendUserAgent": "CloudCinemaAndroid"
   }
 }

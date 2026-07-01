@@ -17,7 +17,10 @@ export function AppShell({ children }: AppShellProps) {
   const router = useRouter();
 
   useEffect(() => {
-    const isNative = typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.isNativePlatform();
+    const isNative = typeof window !== "undefined" && (
+      ((window as any).Capacitor && (window as any).Capacitor.isNativePlatform()) ||
+      (typeof navigator !== "undefined" && (navigator.userAgent.includes("CloudCinemaAndroid") || navigator.userAgent.includes("CloudCinemaIOS")))
+    );
     if (!isNative) return;
 
     import("@capacitor/app").then(({ App }) => {
