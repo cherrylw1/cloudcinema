@@ -7,6 +7,7 @@ import { generateStreamToken } from "@/lib/token";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { EditMetadataButton } from "@/components/media/EditMetadataButton";
 
 export default async function WatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,7 +33,7 @@ export default async function WatchPage({ params }: { params: Promise<{ id: stri
     userId = user.id;
   }
 
-  const isTv = media.mediaType === "tv-show";
+  const isTv = media.mediaType === "tv-show" || media.mediaType === "anime";
   const sectionTitle = isTv && media.series ? media.series : media.title;
   const sectionDesc = isTv 
     ? `Season ${media.season} • Episode ${media.episode} (${media.title})` 
@@ -45,7 +46,7 @@ export default async function WatchPage({ params }: { params: Promise<{ id: stri
     >
       <div className="space-y-4">
         {/* Navigation Return Hook */}
-        <div className="flex items-center">
+        <div className="flex items-center justify-between">
           <Link
             href={isTv ? "/tv-shows" : "/movies"}
             className="flex items-center gap-2 text-xs font-semibold text-foreground/60 hover:text-foreground transition-colors cursor-pointer"
@@ -53,6 +54,11 @@ export default async function WatchPage({ params }: { params: Promise<{ id: stri
             <ArrowLeft className="h-4 w-4" />
             Back to Catalog
           </Link>
+          <EditMetadataButton
+            mediaId={media.id}
+            seriesName={media.series || undefined}
+            defaultType={media.mediaType === "movie" ? "movie" : "tv"}
+          />
         </div>
 
         {/* Video Player Component */}

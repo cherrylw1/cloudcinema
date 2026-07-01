@@ -31,7 +31,7 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
   const { data: episodes, error } = await supabase
     .from("media_library")
     .select("*")
-    .or(`series.eq.${decoded},title.eq.${decoded}`)
+    .or(`series.eq."${decoded}",title.eq."${decoded}"`)
     .order("season", { ascending: true })
     .order("episode", { ascending: true });
 

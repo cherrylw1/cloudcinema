@@ -1,7 +1,7 @@
 import { PageContainer } from "@/components/layout/PageContainer";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { createClient } from "@/clients/supabase/server";
-import { Film, Tv, Library, Sparkles } from "lucide-react";
+import { Film, Tv, Library, Sparkles, FolderPlus } from "lucide-react";
 import Link from "next/link";
 
 export default async function LibraryPage() {
@@ -47,9 +47,18 @@ export default async function LibraryPage() {
               </p>
             </div>
           </div>
-          <div className="text-right">
-            <span className="text-2xl font-black text-brand-primary">{totalCount}</span>
-            <span className="block text-[9px] uppercase tracking-widest text-foreground/40 font-bold mt-0.5">Total Files</span>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/library/group"
+              className="flex items-center gap-1.5 px-3 py-2 border border-brand-primary/30 bg-brand-primary/10 text-brand-primary rounded-xl text-xs font-semibold hover:bg-brand-primary hover:text-white transition-all duration-200 cursor-pointer"
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+              Group Files
+            </Link>
+            <div className="text-right border-l border-border/30 pl-4">
+              <span className="text-2xl font-black text-brand-primary">{totalCount}</span>
+              <span className="block text-[9px] uppercase tracking-widest text-foreground/40 font-bold mt-0.5">Total Files</span>
+            </div>
           </div>
         </GlassCard>
 
