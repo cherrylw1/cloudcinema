@@ -58,10 +58,13 @@ export class SupabaseAuthRepository implements AuthRepository {
     const supabase = this.getSupabase();
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     
+    const isNative = typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.isNativePlatform();
+    const redirectTo = isNative ? "cloudcinema://auth-callback" : `${origin}/api/auth/google/callback`;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${origin}/api/auth/google/callback`,
+        redirectTo,
       },
     });
 

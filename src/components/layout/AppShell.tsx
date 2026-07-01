@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { SelectionProvider } from "@/providers/SelectionProvider";
+import { createClient } from "@/clients/supabase/browser";
 
 interface AppShellProps {
   children: ReactNode;
@@ -12,6 +14,45 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const isNative = typeof window !== "undefined" && (window as any).Capacitor && (window as any).Capacitor.isNativePlatform();
+    if (!isNative) return;
+
+    import("@capacitor/app").then(({ App }) => {
+      App.addListener("appUrlOpen", async (event) => {
+        const url = event.url;
+        if (!url) return;
+
+        if (url.startsWith("cloudcinema://auth-callback")) {
+          const hashIndex = url.indexOf("#");
+          if (hashIndex === -1) return;
+          const hashString = url.substring(hashIndex + 1);
+
+          const params = new URLSearchParams(hashString);
+          const accessToken = params.get("access_token");
+          const refreshToken = params.get("refresh_token");
+
+          if (accessToken && refreshToken) {
+            try {
+              const supabase = createClient();
+              const { error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              if (!error) {
+                router.push("/");
+                router.refresh();
+              }
+            } catch (err) {
+              console.error("Error setting native session:", err);
+            }
+          }
+        }
+      });
+    });
+  }, [router]);
 
   return (
     <SelectionProvider>
