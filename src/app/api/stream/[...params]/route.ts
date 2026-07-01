@@ -13,7 +13,11 @@ export async function GET(
 ) {
   // 1. Resolve and validate route params
   const resolvedParams = await context.params;
-  const paramArray = resolvedParams.params || [];
+  let paramArray = resolvedParams.params || [];
+  
+  if (paramArray[paramArray.length - 1] === "video.mp4") {
+    paramArray = paramArray.slice(0, -1);
+  }
   
   const id = paramArray[0];
   const token = paramArray[1];
@@ -74,7 +78,7 @@ export async function GET(
   // Handle M3U playlist file requests
   if (paramDriveFileId === "playlist.m3u") {
     const origin = request.nextUrl.origin;
-    const streamUrl = `${origin}/api/stream/${id}/${token}/${uid}`;
+    const streamUrl = `${origin}/api/stream/${id}/${token}/${uid}/video.mp4`;
     
     // We clean filename to be ASCII safe
     const cleanTitle = (media.mime_type || "video").includes("video") ? "Play Video" : "Play Media";

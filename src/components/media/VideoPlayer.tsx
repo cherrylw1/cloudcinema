@@ -70,7 +70,7 @@ export function VideoPlayer({ media, initialProgress, streamToken, userId }: Vid
     const variantPath = selectedAudioVariant !== (activeMedia.processedDriveFileId || activeMedia.driveFileId)
       ? `/${selectedAudioVariant}`
       : "";
-    return `${window.location.origin}/api/stream/${activeMedia.id}/${streamToken}/${userId}${variantPath}`;
+    return `${window.location.origin}/api/stream/${activeMedia.id}/${streamToken}/${userId}${variantPath}/video.mp4`;
   };
 
   const handleCopyLink = async () => {
