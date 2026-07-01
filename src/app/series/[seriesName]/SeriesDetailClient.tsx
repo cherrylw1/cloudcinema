@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Plus, Check, Loader2 } from "lucide-react";
-import { createClient } from "@/clients/supabase/browser";
 import { useRouter } from "next/navigation";
 import { EditMetadataButton } from "@/components/media/EditMetadataButton";
 
@@ -31,25 +30,20 @@ export function SeriesDetailClient({
       return;
     }
     setLoading(true);
-    const supabase = createClient();
     try {
-      if (inWatchlist) {
-        // Remove from watchlist
-        const { error } = await supabase
-          .from("watchlist")
-          .delete()
-          .eq("user_id", userId)
-          .eq("media_id", mediaId);
-        if (error) throw error;
-        setInWatchlist(false);
-      } else {
-        // Add to watchlist
-        const { error } = await supabase
-          .from("watchlist")
-          .insert({ user_id: userId, media_id: mediaId });
-        if (error) throw error;
-        setInWatchlist(true);
+      const res = await fetch("/api/watchlist", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ mediaId }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to toggle watchlist");
       }
+      const data = await res.json();
+      setInWatchlist(data.status === "added");
       router.refresh();
     } catch (err) {
       console.error("Error toggling watchlist:", err);
