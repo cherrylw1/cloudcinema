@@ -45,10 +45,11 @@ export async function proxy(request: NextRequest) {
   const isAuthRoute = pathname.startsWith("/api/auth");
   const isStreamRoute = pathname.startsWith("/api/stream");
   const isSubtitlesRoute = pathname.startsWith("/api/subtitles");
+  const isVersionRoute = pathname === "/api/version";
   const isLoginRoute = pathname === "/login";
   const isPendingRoute = pathname === "/pending-approval";
 
-  if (isAuthRoute || isStreamRoute || isSubtitlesRoute) {
+  if (isAuthRoute || isStreamRoute || isSubtitlesRoute || isVersionRoute) {
     return response;
   }
 
