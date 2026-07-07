@@ -29,7 +29,40 @@ export class DriveSyncService {
     this.drive = google.drive({ version: "v3", auth: oauth2Client });
   }
 
-  async sync(): Promise<SyncSummary> {
+  private async resolveFolderPath(
+    parentId: string | undefined,
+    folderCacheMap: Map<string, string>,
+    rootFolderId: string
+  ): Promise<string> {
+    if (!parentId || parentId === rootFolderId || parentId === "root") {
+      return "/";
+    }
+
+    if (folderCacheMap.has(parentId)) {
+      return folderCacheMap.get(parentId)!;
+    }
+
+    try {
+      const res = (await this.drive.files.get({
+        fileId: parentId,
+        fields: "name, parents",
+      })) as unknown as { data: { name?: string; parents?: string[] } };
+
+      const name = res.data.name || "Untitled Folder";
+      const nextParentId = res.data.parents?.[0];
+
+      const parentPath = await this.resolveFolderPath(nextParentId, folderCacheMap, rootFolderId);
+      const currentPath = parentPath === "/" ? `/${name}` : `${parentPath}/${name}`;
+
+      folderCacheMap.set(parentId, currentPath);
+      return currentPath;
+    } catch (err) {
+      console.warn(`[Sync] Failed to resolve parent folder path for ID ${parentId}, falling back to '/'`, err);
+      return "/";
+    }
+  }
+
+  async sync(options?: { full?: boolean; modifiedDays?: number }): Promise<SyncSummary> {
     const rootFolderId = env.googleDriveFolderId || "root";
     const summary: SyncSummary = { scanned: 0, folders: 0, videos: 0, added: 0, updated: 0, skipped: 0 };
     const adminClient = createAdminClient();
@@ -48,73 +81,134 @@ export class DriveSyncService {
       }
     }
 
-    console.log(`[Sync] Fetching file catalog list from Google Drive...`);
-    const allFiles: drive_v3.Schema$File[] = [];
-    let pageToken: string | undefined = undefined;
-
-    do {
-      const response = (await this.drive.files.list({
-        q: "trashed = false and (mimeType = 'application/vnd.google-apps.folder' or mimeType contains 'video/')",
-        fields: "nextPageToken, files(id, name, mimeType, size, parents)",
-        pageSize: 1000,
-        pageToken: pageToken,
-      })) as unknown as { data: { files?: drive_v3.Schema$File[]; nextPageToken?: string | null } };
-
-      const files = response.data.files || [];
-      allFiles.push(...files);
-      pageToken = response.data.nextPageToken || undefined;
-      console.log(`[Sync] Loaded ${allFiles.length} folders and video entries...`);
-    } while (pageToken);
-
-    console.log(`[Sync] Building parent-child folder tree in memory...`);
-    const folderChildrenMap = new Map<string, drive_v3.Schema$File[]>();
-
-    for (const file of allFiles) {
-      if (!file.id) continue;
-      const parents = file.parents || [];
-      for (const parentId of parents) {
-        if (!folderChildrenMap.has(parentId)) {
-          folderChildrenMap.set(parentId, []);
-        }
-        folderChildrenMap.get(parentId)!.push(file);
+    // Determine sync mode (Full vs Incremental)
+    let isFullSync = options?.full === true;
+    if (!isFullSync) {
+      // Check if DB has any existing records
+      const { count } = await adminClient
+        .from("media_library")
+        .select("id", { count: "exact", head: true });
+      
+      if (!count || count === 0) {
+        console.log("[Sync] Database is empty. Defaulting to full catalog sync.");
+        isFullSync = true;
       }
     }
 
-    console.log(`[Sync] Performing depth-first traversal from: ${startFolderId}`);
-    const visitedFolders = new Set<string>();
     const qualifyingVideos: drive_v3.Schema$File[] = [];
 
-    const traverse = (folderId: string, currentPath: string = "/") => {
-      if (visitedFolders.has(folderId)) return;
-      visitedFolders.add(folderId);
-      summary.folders++;
+    if (isFullSync) {
+      console.log(`[Sync] Running FULL catalog sync tree traversal...`);
+      console.log(`[Sync] Fetching file catalog list from Google Drive...`);
+      const allFiles: drive_v3.Schema$File[] = [];
+      let pageToken: string | undefined = undefined;
 
-      const children = folderChildrenMap.get(folderId) || [];
-      for (const child of children) {
-        if (child.mimeType === "application/vnd.google-apps.folder" && child.id) {
-          const folderName = child.name || "Untitled Folder";
-          const nextPath = currentPath === "/" ? `/${folderName}` : `${currentPath}/${folderName}`;
-          traverse(child.id, nextPath);
-        } else if (child.mimeType && child.mimeType.startsWith("video/")) {
-          // Skip video files under 100 MB (e.g. 0kb files, short clips, sample trailers)
-          const fileSize = child.size ? parseInt(child.size, 10) : 0;
+      do {
+        const response = (await this.drive.files.list({
+          q: "trashed = false and (mimeType = 'application/vnd.google-apps.folder' or mimeType contains 'video/')",
+          fields: "nextPageToken, files(id, name, mimeType, size, parents)",
+          pageSize: 1000,
+          pageToken: pageToken,
+        })) as unknown as { data: { files?: drive_v3.Schema$File[]; nextPageToken?: string | null } };
+
+        const files = response.data.files || [];
+        allFiles.push(...files);
+        pageToken = response.data.nextPageToken || undefined;
+        console.log(`[Sync] Loaded ${allFiles.length} folders and video entries...`);
+      } while (pageToken);
+
+      console.log(`[Sync] Building parent-child folder tree in memory...`);
+      const folderChildrenMap = new Map<string, drive_v3.Schema$File[]>();
+
+      for (const file of allFiles) {
+        if (!file.id) continue;
+        const parents = file.parents || [];
+        for (const parentId of parents) {
+          if (!folderChildrenMap.has(parentId)) {
+            folderChildrenMap.set(parentId, []);
+          }
+          folderChildrenMap.get(parentId)!.push(file);
+        }
+      }
+
+      console.log(`[Sync] Performing depth-first traversal from: ${startFolderId}`);
+      const visitedFolders = new Set<string>();
+
+      const traverse = (folderId: string, currentPath: string = "/") => {
+        if (visitedFolders.has(folderId)) return;
+        visitedFolders.add(folderId);
+        summary.folders++;
+
+        const children = folderChildrenMap.get(folderId) || [];
+        for (const child of children) {
+          if (child.mimeType === "application/vnd.google-apps.folder" && child.id) {
+            const folderName = child.name || "Untitled Folder";
+            const nextPath = currentPath === "/" ? `/${folderName}` : `${currentPath}/${folderName}`;
+            traverse(child.id, nextPath);
+          } else if (child.mimeType && child.mimeType.startsWith("video/")) {
+            const fileSize = child.size ? parseInt(child.size, 10) : 0;
+            if (fileSize >= 100 * 1024 * 1024) {
+              summary.videos++;
+              (child as any).folderPath = currentPath;
+              qualifyingVideos.push(child);
+            } else {
+              summary.skipped++;
+            }
+          } else {
+            summary.skipped++;
+          }
+        }
+      };
+
+      traverse(startFolderId, "/");
+      console.log(`[Sync] Traversal complete. Folders: ${summary.folders}, Videos: ${summary.videos}, Skipped: ${summary.skipped}`);
+    } else {
+      const days = options?.modifiedDays || 7;
+      const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      console.log(`[Sync] Running INCREMENTAL catalog sync (modified since ${sinceDate})...`);
+
+      const allFiles: drive_v3.Schema$File[] = [];
+      let pageToken: string | undefined = undefined;
+
+      do {
+        const response = (await this.drive.files.list({
+          q: `trashed = false and mimeType contains 'video/' and modifiedTime > '${sinceDate}'`,
+          fields: "nextPageToken, files(id, name, mimeType, size, parents)",
+          pageSize: 100,
+          pageToken: pageToken,
+        })) as unknown as { data: { files?: drive_v3.Schema$File[]; nextPageToken?: string | null } };
+
+        const files = response.data.files || [];
+        allFiles.push(...files);
+        pageToken = response.data.nextPageToken || undefined;
+      } while (pageToken);
+
+      console.log(`[Sync] Loaded ${allFiles.length} recently modified folders/video entries.`);
+
+      const folderCacheMap = new Map<string, string>();
+      for (const file of allFiles) {
+        if (file.mimeType && file.mimeType.startsWith("video/")) {
+          const fileSize = file.size ? parseInt(file.size, 10) : 0;
           if (fileSize >= 100 * 1024 * 1024) {
             summary.videos++;
-            (child as any).folderPath = currentPath;
-            qualifyingVideos.push(child);
+            // Resolve its parent path recursively
+            const parentId = file.parents?.[0];
+            const resolvedPath = await this.resolveFolderPath(parentId, folderCacheMap, startFolderId);
+            (file as any).folderPath = resolvedPath;
+            qualifyingVideos.push(file);
           } else {
             summary.skipped++;
           }
         } else {
-          summary.skipped++;
+          // Track folders scanned
+          if (file.mimeType === "application/vnd.google-apps.folder") {
+            summary.folders++;
+          } else {
+            summary.skipped++;
+          }
         }
       }
-    };
-
-    // Run in-memory tree traversal
-    traverse(startFolderId, "/");
-
-    console.log(`[Sync] Traversal complete. Folders: ${summary.folders}, Videos: ${summary.videos}, Skipped: ${summary.skipped}`);
+    }
 
     if (qualifyingVideos.length === 0) {
       summary.scanned = summary.folders + summary.videos + summary.skipped;
