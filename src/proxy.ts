@@ -47,8 +47,11 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // 4. Redirect unauthenticated users to /login
+  // 4. Redirect unauthenticated users to /login, or return 401 for API routes
   if (!user) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    }
     if (!isLoginRoute) {
       const redirectUrl = nextUrl.clone();
       redirectUrl.pathname = "/login";
@@ -66,8 +69,11 @@ export async function proxy(request: NextRequest) {
 
   const isApproved = profile?.is_approved ?? false;
 
-  // 6. Redirect unapproved authenticated users to /pending-approval
+  // 6. Redirect unapproved authenticated users to /pending-approval, or return 403 for API routes
   if (!isApproved) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Pending approval." }, { status: 403 });
+    }
     if (!isPendingRoute && !isLoginRoute) {
       const redirectUrl = nextUrl.clone();
       redirectUrl.pathname = "/pending-approval";
