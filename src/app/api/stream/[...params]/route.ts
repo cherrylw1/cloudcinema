@@ -123,7 +123,7 @@ export async function GET(
       const tokenInfo = await oauth2Client.getAccessToken();
       const accessToken = tokenInfo.token;
       if (accessToken) {
-        const redirectTarget = `${proxyUrl.replace(/\/$/, "")}?fileId=${fileId}&token=${accessToken}`;
+        const redirectTarget = `${proxyUrl.replace(/\/$/, "")}?fileId=${fileId}&token=${accessToken}${fileSize ? `&fileSize=${fileSize}` : ""}`;
         return NextResponse.redirect(redirectTarget);
       }
     }
