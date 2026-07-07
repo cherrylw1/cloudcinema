@@ -134,7 +134,7 @@ export class DriveSyncService {
     }
     const existingFileMetadataMap = new Map<string, ExistingMeta>();
 
-    const dbChunkSize = 500;
+    const dbChunkSize = 100;
     for (let i = 0; i < driveFileIds.length; i += dbChunkSize) {
       const chunk = driveFileIds.slice(i, i + dbChunkSize);
       const { data: existingList, error } = await adminClient
