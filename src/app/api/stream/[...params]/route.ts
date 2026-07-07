@@ -117,6 +117,17 @@ export async function GET(
       refresh_token: env.googleRefreshToken,
     });
 
+    // Check if we want to offload streaming to a Cloudflare Worker proxy
+    const proxyUrl = process.env.NEXT_PUBLIC_STREAM_PROXY_URL;
+    if (proxyUrl) {
+      const tokenInfo = await oauth2Client.getAccessToken();
+      const accessToken = tokenInfo.token;
+      if (accessToken) {
+        const redirectTarget = `${proxyUrl.replace(/\/$/, "")}?fileId=${fileId}&token=${accessToken}`;
+        return NextResponse.redirect(redirectTarget);
+      }
+    }
+
     const drive = google.drive({ version: "v3", auth: oauth2Client });
 
     // Fetch size of variant if needed
