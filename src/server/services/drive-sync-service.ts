@@ -85,7 +85,7 @@ export class DriveSyncService {
 
     // Determine sync mode (Full vs Incremental)
     let isFullSync = options?.full === true;
-    if (!isFullSync) {
+    if (options?.full === undefined) {
       // Check if DB has any existing records
       const { count } = await adminClient
         .from("media_library")
