@@ -13,10 +13,6 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // Temporary bypass for diagnostic testing
-  if (request.headers.get("x-bypass-auth") === "secret-key-123") {
-    return response;
-  }
 
   // 2. Create local client reading refreshed cookie headers
   const supabase = createServerClient(url, anonKey, {
