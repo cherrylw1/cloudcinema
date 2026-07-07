@@ -24,8 +24,13 @@ export class SupabaseMediaRepository implements MediaRepository {
     }
 
     if (options?.query) {
-      const q = options.query;
-      query = query.or(`title.ilike.%${q}%,series.ilike.%${q}%`);
+      const tokens = options.query
+        .trim()
+        .split(/\s+/)
+        .filter((t) => t.length > 0);
+      for (const token of tokens) {
+        query = query.or(`title.ilike.%${token}%,series.ilike.%${token}%`);
+      }
     }
 
     // Sort alphabetically by title
@@ -62,6 +67,7 @@ export class SupabaseMediaRepository implements MediaRepository {
       audioVariants: (row.audio_variants as AudioVariant[] | null) ?? null,
       subtitleTracks: (row.subtitle_tracks as SubtitleTrack[] | null) ?? null,
       processedDriveFileId: row.processed_drive_file_id,
+      folderPath: row.folder_path,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -104,6 +110,7 @@ export class SupabaseMediaRepository implements MediaRepository {
       audioVariants: (data.audio_variants as AudioVariant[] | null) ?? null,
       subtitleTracks: (data.subtitle_tracks as SubtitleTrack[] | null) ?? null,
       processedDriveFileId: data.processed_drive_file_id,
+      folderPath: data.folder_path,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };

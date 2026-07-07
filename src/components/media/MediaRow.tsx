@@ -10,9 +10,10 @@ interface MediaRowProps {
   items: Media[];
   /** Portrait cards (posters) vs landscape (backdrops) */
   variant?: "portrait" | "landscape";
+  description?: string;
 }
 
-export function MediaRow({ title, items, variant = "portrait" }: MediaRowProps) {
+export function MediaRow({ title, items, variant = "portrait", description }: MediaRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
 
   if (items.length === 0) return null;
@@ -26,9 +27,18 @@ export function MediaRow({ title, items, variant = "portrait" }: MediaRowProps) 
   return (
     <div className="space-y-3 group/row">
       {/* Section header with accent pip */}
-      <div className="flex items-center gap-3">
-        <span className="block h-4 w-[3px] rounded-full bg-brand-primary opacity-80" />
-        <h3 className="text-[15px] font-semibold text-white/90 tracking-tight">{title}</h3>
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-3">
+          <span className="block h-4 w-[3px] rounded-full bg-brand-primary opacity-80" />
+          <h2 className="text-sm font-bold tracking-wider uppercase text-foreground/80">
+            {title}
+          </h2>
+        </div>
+        {description && (
+          <p className="text-[11px] text-white/45 pl-[15px] leading-snug">
+            {description}
+          </p>
+        )}
       </div>
 
       <div className="relative">

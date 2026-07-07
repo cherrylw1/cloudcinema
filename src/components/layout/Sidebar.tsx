@@ -6,9 +6,11 @@ import { cn } from "@/lib/cn";
 import { navigationItems } from "@/config/navigation";
 import { getCurrentYear } from "@/lib/format";
 import { Logo } from "@/components/common/Logo";
+import { Magnetic } from "@/components/ui/Magnetic";
 import {
   Home,
   FolderHeart,
+  Folder,
   Film,
   Tv,
   Sparkles,
@@ -22,6 +24,7 @@ import {
 const iconMap: Record<string, LucideIcon> = {
   Home,
   FolderHeart,
+  Folder,
   Film,
   Tv,
   Sparkles,
@@ -85,29 +88,30 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             const isActive = pathname === item.href;
 
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                className={cn(
-                  "relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-white/[0.12] text-white"
-                    : "text-white/50 hover:bg-white/[0.06] hover:text-white/90"
-                )}
-              >
-                {/* Active left accent bar */}
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-brand-primary shadow-[0_0_8px_rgba(229,9,20,0.7)]" />
-                )}
-                <Icon
+              <Magnetic key={item.href} className="block w-full">
+                <Link
+                  href={item.href}
+                  onClick={onClose}
                   className={cn(
-                    "h-4.5 w-4.5 shrink-0 transition-colors duration-200",
-                    isActive ? "text-white" : "text-white/40"
+                    "relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-white/[0.12] text-white"
+                      : "text-white/50 hover:bg-white/[0.06] hover:text-white/90"
                   )}
-                />
-                {item.label}
-              </Link>
+                >
+                  {/* Active left accent bar */}
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-brand-primary shadow-[0_0_8px_rgba(229,9,20,0.7)]" />
+                  )}
+                  <Icon
+                    className={cn(
+                      "h-4.5 w-4.5 shrink-0 transition-colors duration-200",
+                      isActive ? "text-white" : "text-white/40"
+                    )}
+                  />
+                  {item.label}
+                </Link>
+              </Magnetic>
             );
           })}
         </nav>

@@ -5,7 +5,7 @@ export type Theme = "light" | "dark" | "system";
 export interface NavigationItem {
   label: string;
   href: string;
-  icon: "Home" | "FolderHeart" | "Film" | "Tv" | "Sparkles" | "Settings" | "Bookmark" | "Heart" | LucideIcon;
+  icon: "Home" | "FolderHeart" | "Folder" | "Film" | "Tv" | "Sparkles" | "Settings" | "Bookmark" | "Heart" | LucideIcon;
 }
 
 export interface LayoutConfig {

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { MovieDetailActions } from "./MovieDetailActions";
+import { MediaAnalysisPanel } from "@/components/media/MediaAnalysisPanel";
 
 interface MoviePageProps {
   params: Promise<{ id: string }>;
@@ -254,6 +255,11 @@ export default async function MovieDetailsPage({ params }: MoviePageProps) {
               />
             </div>
           </div>
+        </div>
+
+        {/* AI Curation & Analysis Panel */}
+        <div className="max-w-5xl mt-10 w-full">
+          <MediaAnalysisPanel mediaId={movie.id} />
         </div>
       </div>
     </div>

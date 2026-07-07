@@ -35,7 +35,7 @@ export function BottomNavBar() {
           <Link
             key={item.href}
             href={item.href}
-            className="flex flex-col items-center justify-center flex-1 h-full py-2 gap-1 group relative"
+            className="flex flex-col items-center justify-center flex-1 h-full py-2 gap-1 group relative active:scale-95 transition-all duration-100 ease-out"
           >
             {/* Active glow indicator pill */}
             <div

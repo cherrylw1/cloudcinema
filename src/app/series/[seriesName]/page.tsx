@@ -4,6 +4,7 @@ import { createClient } from "@/clients/supabase/server";
 import { Play, ChevronLeft } from "lucide-react";
 import { SeriesDetailClient } from "./SeriesDetailClient";
 import { EpisodeRow } from "./EpisodeRow";
+import { MediaAnalysisPanel } from "@/components/media/MediaAnalysisPanel";
 
 interface SeriesPageProps {
   params: Promise<{ seriesName: string }>;
@@ -58,16 +59,40 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
   } = await supabase.auth.getUser();
   const progressMap: Record<string, { position: number; completed: boolean }> = {};
   let isInWatchlist = false;
+  let playTarget = episodes[0];
 
   if (user) {
     const mediaIds = episodes.map((e) => e.id);
     const { data: progress } = await supabase
       .from("user_progress")
-      .select("media_id, playback_position, completed")
+      .select("media_id, playback_position, completed, last_watched")
       .eq("profile_id", user.id)
       .in("media_id", mediaIds);
-    for (const p of progress || []) {
-      progressMap[p.media_id] = { position: p.playback_position, completed: p.completed };
+
+    if (progress && progress.length > 0) {
+      let latestRecord = progress[0];
+      for (const p of progress) {
+        if (new Date(p.last_watched) > new Date(latestRecord.last_watched)) {
+          latestRecord = p;
+        }
+      }
+
+      const latestEpIndex = episodes.findIndex((e) => e.id === latestRecord.media_id);
+      if (latestEpIndex !== -1) {
+        if (!latestRecord.completed) {
+          playTarget = episodes[latestEpIndex];
+        } else {
+          if (latestEpIndex + 1 < episodes.length) {
+            playTarget = episodes[latestEpIndex + 1];
+          } else {
+            playTarget = episodes[latestEpIndex];
+          }
+        }
+      }
+
+      for (const p of progress) {
+        progressMap[p.media_id] = { position: p.playback_position, completed: p.completed };
+      }
     }
 
     const { data: watchlistEntry } = await supabase
@@ -78,9 +103,6 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
       .maybeSingle();
     isInWatchlist = !!watchlistEntry;
   }
-
-  const firstUnwatched =
-    episodes.find((ep) => !progressMap[ep.id]?.completed) || episodes[0];
 
   return (
     <div className="min-h-screen text-white" style={{ background: "#08080f" }}>
@@ -180,7 +202,7 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
               )}
               <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-1">
                 <Link
-                  href={`/watch/${firstUnwatched.id}`}
+                  href={`/watch/${playTarget.id}`}
                   className="inline-flex items-center gap-2 px-5 sm:px-7 py-2.5 rounded-2xl text-sm font-bold text-black hover:opacity-90 transition-all duration-200 shadow-lg animate-scale-in"
                   style={{
                     background: "rgba(255,255,255,0.95)",
@@ -205,6 +227,11 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
 
       {/* ── Episodes ──────────────────────────────────────── */}
       <div className="max-w-5xl mx-auto px-6 md:px-14 py-8 space-y-8">
+        {/* AI Curation & Analysis Panel */}
+        <div className="w-full">
+          <MediaAnalysisPanel mediaId={showMeta.id} />
+        </div>
+
         {seasons.map((season) => (
           <div key={season} className="space-y-3">
             {seasons.length > 1 && (

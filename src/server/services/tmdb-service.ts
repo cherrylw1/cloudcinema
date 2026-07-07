@@ -192,4 +192,30 @@ export class TmdbService {
       }));
     }
   }
+
+  async getRecommendations(tmdbId: number, type: "movie" | "tv"): Promise<number[]> {
+    try {
+      interface RecommendationResponse {
+        results?: Array<{ id: number }>;
+      }
+      const data = await this.request<RecommendationResponse>(`/${type}/${tmdbId}/recommendations`, {});
+      return (data.results || []).map((r) => r.id);
+    } catch (err) {
+      console.warn(`[TMDB] Failed to fetch recommendations for ${type} ID ${tmdbId}:`, err);
+      return [];
+    }
+  }
+
+  async getTrending(type: "movie" | "tv" | "all" = "all"): Promise<number[]> {
+    try {
+      interface TrendingResponse {
+        results?: Array<{ id: number }>;
+      }
+      const data = await this.request<TrendingResponse>(`/trending/${type}/week`, {});
+      return (data.results || []).map((r) => r.id);
+    } catch (err) {
+      console.warn(`[TMDB] Failed to fetch trending items:`, err);
+      return [];
+    }
+  }
 }

@@ -7,11 +7,22 @@ export async function GET(request: Request) {
   const next = requestUrl.searchParams.get("next") ?? "/";
   const source = requestUrl.searchParams.get("source");
 
+  // Check if this login request originated from the native app's WebView via our custom cookie
+  const cookieHeader = request.headers.get("cookie") || "";
+  const isWebview = cookieHeader.includes("auth_source=webview") || source === "webview";
+
   if (code) {
     try {
       const supabase = await createClient();
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (!error && data?.session) {
+        // If logged in via WebView, clear the cookie and redirect to '/' directly
+        if (isWebview) {
+          const response = NextResponse.redirect(new URL(next, request.url));
+          response.cookies.set("auth_source", "", { maxAge: 0, path: "/" });
+          return response;
+        }
+
         if (source === "app") {
           const accessToken = data.session.access_token;
           const refreshToken = data.session.refresh_token;

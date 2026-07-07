@@ -1,7 +1,7 @@
 import { PageContainer } from "@/components/layout/PageContainer";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { createClient } from "@/clients/supabase/server";
-import { Film, Tv, Library, Sparkles, FolderPlus } from "lucide-react";
+import { Film, Tv, Library, Sparkles, FolderPlus, Folder } from "lucide-react";
 import Link from "next/link";
 
 export default async function LibraryPage() {
@@ -63,7 +63,7 @@ export default async function LibraryPage() {
         </GlassCard>
 
         {/* Section Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Movies Card */}
           <Link href="/movies" className="block group">
             <GlassCard className="p-6 space-y-4 bg-card/10 hover:bg-card/25 border border-border/40 transition-all duration-300">
@@ -128,6 +128,29 @@ export default async function LibraryPage() {
                 <h4 className="text-sm font-semibold text-foreground/80 mt-1">Anime</h4>
                 <p className="text-xs text-foreground/45 mt-0.5">
                   Browse animated shows and series collections.
+                </p>
+              </div>
+            </GlassCard>
+          </Link>
+
+          {/* Folders Card */}
+          <Link href="/library/folders" className="block group">
+            <GlassCard className="p-6 space-y-4 bg-card/10 hover:bg-card/25 border border-border/40 transition-all duration-300">
+              <div className="flex justify-between items-start">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 group-hover:scale-105 transition-transform duration-300">
+                  <Folder className="h-6 w-6" />
+                </div>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                  Browse
+                </span>
+              </div>
+              <div>
+                <span className="text-3xl font-extrabold text-foreground tracking-tight">
+                  Folders
+                </span>
+                <h4 className="text-sm font-semibold text-foreground/80 mt-1">Folders</h4>
+                <p className="text-xs text-foreground/45 mt-0.5">
+                  Browse original Google Drive directory structure.
                 </p>
               </div>
             </GlassCard>

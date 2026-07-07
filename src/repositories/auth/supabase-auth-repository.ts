@@ -60,12 +60,22 @@ export class SupabaseAuthRepository implements AuthRepository {
     
     const isNative = typeof window !== "undefined" && (
       ((window as any).Capacitor && (window as any).Capacitor.isNativePlatform()) ||
-      (typeof navigator !== "undefined" && (navigator.userAgent.includes("CloudCinemaAndroid") || navigator.userAgent.includes("CloudCinemaIOS"))) ||
-      localStorage.getItem("platform") === "app"
+      (typeof navigator !== "undefined" && (
+        navigator.userAgent.includes("CloudCinemaAndroid") || 
+        navigator.userAgent.includes("CloudCinemaIOS") ||
+        // Also check if we overridden the user agent but platform=app is in URL/localStorage
+        localStorage.getItem("platform") === "app"
+      ))
     );
-    const redirectTo = isNative 
-      ? `${origin}/api/auth/google/callback?source=app` 
-      : `${origin}/api/auth/google/callback`;
+
+    // If native platform, set a cookie to indicate to our callback handler
+    // that it should redirect directly to the home page inside the WebView.
+    if (isNative && typeof document !== "undefined") {
+      document.cookie = "auth_source=webview; path=/; max-age=3600; SameSite=Lax; Secure";
+    }
+
+    // Always redirect to the standard callback URL to avoid Supabase dashboard URL validation errors.
+    const redirectTo = `${origin}/api/auth/google/callback`;
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",

@@ -30,7 +30,7 @@ export function MediaCard({ media }: MediaCardProps) {
   const href = media.mediaType === "movie" ? `/movies/${media.id}` : `/watch/${media.id}`;
 
   return (
-    <Link href={href} onClick={handleClick} className="block group relative">
+    <Link href={href} onClick={handleClick} className="block group relative active:scale-[0.98] transition-all duration-100 ease-out">
       <div
         className="relative overflow-hidden flex flex-col justify-between aspect-video rounded-2xl transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] cursor-pointer h-full group-hover:scale-[1.02]"
         style={{

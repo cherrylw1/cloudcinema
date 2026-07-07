@@ -84,7 +84,7 @@ export class DriveSyncService {
     const visitedFolders = new Set<string>();
     const qualifyingVideos: drive_v3.Schema$File[] = [];
 
-    const traverse = (folderId: string) => {
+    const traverse = (folderId: string, currentPath: string = "/") => {
       if (visitedFolders.has(folderId)) return;
       visitedFolders.add(folderId);
       summary.folders++;
@@ -92,10 +92,19 @@ export class DriveSyncService {
       const children = folderChildrenMap.get(folderId) || [];
       for (const child of children) {
         if (child.mimeType === "application/vnd.google-apps.folder" && child.id) {
-          traverse(child.id);
+          const folderName = child.name || "Untitled Folder";
+          const nextPath = currentPath === "/" ? `/${folderName}` : `${currentPath}/${folderName}`;
+          traverse(child.id, nextPath);
         } else if (child.mimeType && child.mimeType.startsWith("video/")) {
-          summary.videos++;
-          qualifyingVideos.push(child);
+          // Skip video files under 100 MB (e.g. 0kb files, short clips, sample trailers)
+          const fileSize = child.size ? parseInt(child.size, 10) : 0;
+          if (fileSize >= 100 * 1024 * 1024) {
+            summary.videos++;
+            (child as any).folderPath = currentPath;
+            qualifyingVideos.push(child);
+          } else {
+            summary.skipped++;
+          }
         } else {
           summary.skipped++;
         }
@@ -103,7 +112,7 @@ export class DriveSyncService {
     };
 
     // Run in-memory tree traversal
-    traverse(startFolderId);
+    traverse(startFolderId, "/");
 
     console.log(`[Sync] Traversal complete. Folders: ${summary.folders}, Videos: ${summary.videos}, Skipped: ${summary.skipped}`);
 
@@ -115,14 +124,22 @@ export class DriveSyncService {
     console.log(`[Sync] Querying existing DB records to identify additions/updates...`);
     const driveFileIds = qualifyingVideos.map((v) => v.id);
     const existingFileIdsSet = new Set<string>();
-    const existingFileMetadataMap = new Map<string, { processing_status: string }>();
+    interface ExistingMeta {
+      processing_status: string;
+      title: string;
+      series: string | null;
+      season: number | null;
+      episode: number | null;
+      media_type: "movie" | "tv-show" | "anime";
+    }
+    const existingFileMetadataMap = new Map<string, ExistingMeta>();
 
     const dbChunkSize = 100;
     for (let i = 0; i < driveFileIds.length; i += dbChunkSize) {
       const chunk = driveFileIds.slice(i, i + dbChunkSize);
       const { data: existingList, error } = await adminClient
         .from("media_library")
-        .select("drive_file_id, processing_status")
+        .select("drive_file_id, processing_status, title, series, season, episode, media_type")
         .in("drive_file_id", chunk);
 
       if (error) throw error;
@@ -131,6 +148,11 @@ export class DriveSyncService {
           existingFileIdsSet.add(row.drive_file_id);
           existingFileMetadataMap.set(row.drive_file_id, {
             processing_status: row.processing_status || "none",
+            title: row.title,
+            series: row.series,
+            season: row.season,
+            episode: row.episode,
+            media_type: row.media_type as "movie" | "tv-show" | "anime",
           });
         }
       }
@@ -176,31 +198,33 @@ export class DriveSyncService {
       }
 
       const processingStatus = meta ? meta.processing_status : "none";
+      const dbTitle = meta ? meta.title : title;
+      const dbSeries = meta ? meta.series : series;
+      const dbSeason = meta ? meta.season : season;
+      const dbEpisode = meta ? meta.episode : episode;
+      const dbMediaType = meta ? meta.media_type : mediaType;
 
       upsertPayload.push({
         drive_file_id: file.id,
-        title,
-        series,
-        season,
-        episode,
-        media_type: mediaType,
+        title: dbTitle,
+        series: dbSeries,
+        season: dbSeason,
+        episode: dbEpisode,
+        media_type: dbMediaType,
         file_size: fileSize,
         mime_type: file.mimeType || null,
         processing_status: processingStatus,
+        folder_path: (file as any).folderPath || "/",
       });
     }
 
-    const newPayload = upsertPayload.filter(
-      (row) => row.drive_file_id && !existingFileIdsSet.has(row.drive_file_id)
-    );
-
-    console.log(`[Sync] Inserting ${newPayload.length} new media records in batches of 100...`);
-    const insertChunkSize = 100;
-    for (let i = 0; i < newPayload.length; i += insertChunkSize) {
-      const chunk = newPayload.slice(i, i + insertChunkSize);
+    console.log(`[Sync] Upserting ${upsertPayload.length} media records in batches of 100...`);
+    const upsertChunkSize = 100;
+    for (let i = 0; i < upsertPayload.length; i += upsertChunkSize) {
+      const chunk = upsertPayload.slice(i, i + upsertChunkSize);
       const { error } = await adminClient
         .from("media_library")
-        .insert(chunk);
+        .upsert(chunk, { onConflict: "drive_file_id" });
 
       if (error) throw error;
     }

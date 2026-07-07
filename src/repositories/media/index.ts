@@ -45,6 +45,9 @@ export interface Media {
   audioVariants?: AudioVariant[] | null;
   subtitleTracks?: SubtitleTrack[] | null;
   processedDriveFileId?: string | null;
+  folderPath?: string;
+  isGroup?: boolean;
+  episodeIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
