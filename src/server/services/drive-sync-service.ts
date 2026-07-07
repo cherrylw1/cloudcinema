@@ -54,7 +54,7 @@ export class DriveSyncService {
 
     do {
       const response = (await this.drive.files.list({
-        q: "trashed = false",
+        q: "trashed = false and (mimeType = 'application/vnd.google-apps.folder' or mimeType contains 'video/')",
         fields: "nextPageToken, files(id, name, mimeType, size, parents)",
         pageSize: 1000,
         pageToken: pageToken,
@@ -63,7 +63,7 @@ export class DriveSyncService {
       const files = response.data.files || [];
       allFiles.push(...files);
       pageToken = response.data.nextPageToken || undefined;
-      console.log(`[Sync] Loaded ${allFiles.length} file metadata entries...`);
+      console.log(`[Sync] Loaded ${allFiles.length} folders and video entries...`);
     } while (pageToken);
 
     console.log(`[Sync] Building parent-child folder tree in memory...`);
@@ -134,7 +134,7 @@ export class DriveSyncService {
     }
     const existingFileMetadataMap = new Map<string, ExistingMeta>();
 
-    const dbChunkSize = 100;
+    const dbChunkSize = 500;
     for (let i = 0; i < driveFileIds.length; i += dbChunkSize) {
       const chunk = driveFileIds.slice(i, i + dbChunkSize);
       const { data: existingList, error } = await adminClient
@@ -218,8 +218,8 @@ export class DriveSyncService {
       });
     }
 
-    console.log(`[Sync] Upserting ${upsertPayload.length} media records in batches of 100...`);
-    const upsertChunkSize = 100;
+    console.log(`[Sync] Upserting ${upsertPayload.length} media records in batches of 500...`);
+    const upsertChunkSize = 500;
     for (let i = 0; i < upsertPayload.length; i += upsertChunkSize) {
       const chunk = upsertPayload.slice(i, i + upsertChunkSize);
       const { error } = await adminClient
