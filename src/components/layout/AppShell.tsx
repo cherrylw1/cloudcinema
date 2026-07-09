@@ -8,6 +8,8 @@ import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { SelectionProvider } from "@/providers/SelectionProvider";
 import { createClient } from "@/clients/supabase/browser";
 import { FluidBackground } from "@/components/ui/FluidBackground";
+import { AnimatePresence, motion } from "framer-motion";
+import { PreloadingScreen } from "@/components/common/PreloadingScreen";
 
 interface AppShellProps {
   children: ReactNode;
@@ -15,8 +17,25 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+
+  // Check if preloader has already run in this session
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hasLoaded = sessionStorage.getItem("cherry_preloader_run");
+      if (hasLoaded) {
+        setIsLoading(false);
+      } else {
+        const timer = setTimeout(() => {
+          setIsLoading(false);
+          sessionStorage.setItem("cherry_preloader_run", "true");
+        }, 2500); // 2.5 seconds loading duration matching progress animation
+        return () => clearTimeout(timer);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -71,31 +90,42 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <SelectionProvider>
-      {/* Root container with ambient background gradient */}
-      <div className="min-h-screen bg-background text-foreground transition-colors duration-300 relative">
-        {/* Dynamic ambient fluid background blobs (Drifting lava lamp nebula) */}
-        <FluidBackground />
-
-        {/* Sidebar Navigation */}
-        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-
-        {/* Main Content Area */}
-        <div className="flex flex-col min-h-screen md:pl-64 relative z-10">
-          {/* Top Navigation */}
-          <TopBar onOpenSidebar={() => setIsSidebarOpen(true)} />
-
-          {/* Content Container */}
-          <main 
-            key={pathname}
-            className="flex-1 p-6 pb-24 md:p-8 md:pb-8 max-w-7xl w-full mx-auto animate-fade-in"
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <PreloadingScreen key="preloader" />
+        ) : (
+          <motion.div
+            key="app-content"
+            initial={{ opacity: 0, y: 12, filter: "blur(6px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            transition={{ duration: 0.8, ease: [0.25, 1, 0.5, 1] }}
+            className="min-h-screen bg-background text-foreground transition-colors duration-300 relative"
           >
-            {children}
-          </main>
-        </div>
+            {/* Dynamic ambient fluid background blobs (Drifting lava lamp nebula) */}
+            <FluidBackground />
 
-        {/* Mobile Bottom Navigation Bar */}
-        <BottomNavBar />
-      </div>
+            {/* Sidebar Navigation */}
+            <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+
+            {/* Main Content Area */}
+            <div className="flex flex-col min-h-screen md:pl-64 relative z-10">
+              {/* Top Navigation */}
+              <TopBar onOpenSidebar={() => setIsSidebarOpen(true)} />
+
+              {/* Content Container */}
+              <main 
+                key={pathname}
+                className="flex-1 p-6 pb-24 md:p-8 md:pb-8 max-w-7xl w-full mx-auto animate-fade-in"
+              >
+                {children}
+              </main>
+            </div>
+
+            {/* Mobile Bottom Navigation Bar */}
+            <BottomNavBar />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </SelectionProvider>
   );
 }
