@@ -23,18 +23,23 @@ export function AppShell({ children }: AppShellProps) {
 
   // Check if preloader has already run in this session
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
     if (typeof window !== "undefined") {
       const hasLoaded = sessionStorage.getItem("cherry_preloader_run");
       if (hasLoaded) {
         setIsLoading(false);
       } else {
-        const timer = setTimeout(() => {
+        timer = setTimeout(() => {
           setIsLoading(false);
           sessionStorage.setItem("cherry_preloader_run", "true");
         }, 2500); // 2.5 seconds loading duration matching progress animation
-        return () => clearTimeout(timer);
       }
     }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
