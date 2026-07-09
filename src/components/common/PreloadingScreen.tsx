@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, Variants } from "framer-motion";
 
 export function PreloadingScreen() {
   const [progress, setProgress] = useState(0);
@@ -28,7 +28,7 @@ export function PreloadingScreen() {
   }, []);
 
   // Framer Motion variants for stagger animations
-  const containerVariants = {
+  const containerVariants: Variants = {
     initial: {},
     animate: {
       transition: {
@@ -38,13 +38,13 @@ export function PreloadingScreen() {
     },
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     initial: { opacity: 0, y: 15, filter: "blur(4px)" },
     animate: {
       opacity: 1,
       y: 0,
       filter: "blur(0px)",
-      transition: { duration: 0.6, ease: "easeOut" },
+      transition: { duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] },
     },
   };
 
