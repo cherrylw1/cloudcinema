@@ -38,6 +38,10 @@ export async function proxy(request: NextRequest) {
   const nextUrl = request.nextUrl;
   const pathname = nextUrl.pathname;
 
+  if (pathname === "/.well-known/assetlinks.json") {
+    return response;
+  }
+
   const isAuthRoute = pathname.startsWith("/api/auth");
   const isStreamRoute = pathname.startsWith("/api/stream");
   const isSubtitlesRoute = pathname.startsWith("/api/subtitles");

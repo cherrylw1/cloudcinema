@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.cloudcinema.app",
+      "sha256_cert_fingerprints": [
+        "1A:70:6C:CB:7A:A1:3F:20:F7:80:B4:E7:AF:D3:8E:DC:1F:2B:50:92:07:80:AB:3A:CE:DF:57:6A:A6:68:BC:C2"
+      ]
+    }
+  }
+]

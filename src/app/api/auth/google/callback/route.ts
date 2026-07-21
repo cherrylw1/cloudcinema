@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/clients/supabase/server";
-import {
-  nativeCallbackHeaders,
-  nativeCallbackPage,
-} from "@/lib/auth/native-callback-page";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -17,13 +13,15 @@ export async function GET(request: Request) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (!error && data?.session) {
         if (isNative) {
-          return new NextResponse(
-            nativeCallbackPage(
-              data.session.access_token,
-              data.session.refresh_token,
-            ),
-            { headers: nativeCallbackHeaders },
+          const session = new URLSearchParams({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          });
+          const completionUrl = new URL(
+            "https://cherrycinema.netlify.app/api/auth/android/complete",
           );
+          completionUrl.hash = session.toString();
+          return NextResponse.redirect(completionUrl, 302);
         }
         return NextResponse.redirect(new URL(next, request.url));
       }

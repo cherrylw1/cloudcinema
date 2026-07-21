@@ -39,7 +39,12 @@ export function AppShell({ children }: AppShellProps) {
       const handleAuthUrl = async (url: string | undefined) => {
         if (!url) return;
 
-        if (url.startsWith("cloudcinema://auth-callback")) {
+        const isCustomCallback = url.startsWith("cloudcinema://auth-callback");
+        const isVerifiedCallback = url.startsWith(
+          "https://cherrycinema.netlify.app/api/auth/android/complete",
+        );
+
+        if (isCustomCallback || isVerifiedCallback) {
           if (handledAuthUrl.current === url) return;
           handledAuthUrl.current = url;
 
