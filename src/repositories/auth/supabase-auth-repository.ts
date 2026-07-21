@@ -62,7 +62,7 @@ export class SupabaseAuthRepository implements AuthRepository {
     const isNative = isNativeApp();
 
     const redirectTo = isNative
-      ? `${origin}/api/auth/google/callback/native`
+      ? `${origin}/api/auth/google/callback?source=app`
       : `${origin}/api/auth/google/callback`;
 
     const { data, error } = await supabase.auth.signInWithOAuth({

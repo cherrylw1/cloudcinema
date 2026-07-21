@@ -121,8 +121,9 @@ public class MainActivity extends BridgeActivity {
 
                     Uri callbackUri = Uri.parse(redirectTo);
                     callbackUri = callbackUri.buildUpon()
-                        .path("/api/auth/google/callback/native")
+                        .path("/api/auth/google/callback")
                         .clearQuery()
+                        .appendQueryParameter("source", "app")
                         .fragment(null)
                         .build();
 
