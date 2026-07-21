@@ -32,18 +32,6 @@ export default async function WatchPage({ params }: { params: Promise<{ id: stri
     const progressRepository = new SupabaseProgressRepository();
     initialProgress = await progressRepository.getProgress(user.id, media.id);
 
-    // Touch the progress record to update last_watched timestamp immediately on page load
-    await progressRepository.saveProgress({
-      profileId: user.id,
-      mediaId: media.id,
-      playbackPosition: initialProgress ? initialProgress.playbackPosition : 0,
-      completed: initialProgress ? initialProgress.completed : false,
-    });
-
-    if (!initialProgress) {
-      initialProgress = await progressRepository.getProgress(user.id, media.id);
-    }
-
     streamToken = generateStreamToken(media.id, user.id);
     userId = user.id;
   }

@@ -76,7 +76,7 @@ export function SeriesCard({ media, horizontal = false }: SeriesCardProps) {
 
   if (horizontal) {
     return (
-      <Link href={href} onClick={handleClick} className="block group w-full cursor-pointer">
+      <Link href={href} prefetch onClick={handleClick} className="block group w-full cursor-pointer">
         {/* Outer container handles 3D tilt perspective */}
         <div style={{ perspective: 1000 }} className="w-full">
           <motion.div
@@ -227,7 +227,7 @@ export function SeriesCard({ media, horizontal = false }: SeriesCardProps) {
 
   // Landscape / backdrop card
   return (
-    <Link href={href} onClick={handleClick} className="block group cursor-pointer">
+    <Link href={href} prefetch onClick={handleClick} className="block group cursor-pointer">
       <div style={{ perspective: 1000 }} className="w-full">
         <motion.div
           ref={cardRef}

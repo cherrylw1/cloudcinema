@@ -40,6 +40,7 @@ export function EpisodeRow({
   return (
     <Link
       href={`/watch/${ep.id}`}
+      prefetch
       onClick={handleClick}
       className={`flex items-center gap-4 p-4 rounded-xl border hover:bg-white/10 transition-all group relative select-none ${
         isSelected 

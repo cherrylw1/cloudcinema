@@ -12,8 +12,10 @@ import {
 } from "lucide-react";
 
 // Safe static imports for Capacitor
-import { Capacitor } from "@capacitor/core";
 import { VideoPlayer as CapVideoPlayer } from "@capgo/capacitor-video-player";
+import type { capVideoPlayerOptions } from "@capgo/capacitor-video-player";
+import type { PluginListenerHandle } from "@capacitor/core";
+import { rememberNativeApp } from "@/lib/platform";
 
 interface VideoPlayerProps {
   media: Media;
@@ -22,6 +24,17 @@ interface VideoPlayerProps {
   userId: string;
   nextEpisode?: Media | null;
 }
+
+interface NativePlayerEvent {
+  currentTime?: number;
+}
+
+type NativeVideoPlayer = typeof CapVideoPlayer & {
+  addListener(
+    eventName: "jeepCapVideoPlayerPause" | "jeepCapVideoPlayerEnded" | "jeepCapVideoPlayerExit",
+    listener: (data: NativePlayerEvent) => void
+  ): Promise<PluginListenerHandle>;
+};
 
 function formatLanguage(lang: string | null): string {
   if (!lang) return "Unknown";
@@ -65,6 +78,7 @@ export function VideoPlayer({
   // Internal refs that don't need to trigger re-renders
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const nativeListenersRef = useRef<Array<{ remove: () => Promise<void> }>>([]);
   const initialSeekDone = useRef(false);
   const lastSavedTime = useRef<number>(0);
   const seekTargetRef = useRef<number | null>(null);
@@ -94,6 +108,7 @@ export function VideoPlayer({
 
   // ── Fullscreen state (prevents dynamic layout resizing issues) ───────────
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [nativePlayerState, setNativePlayerState] = useState<"idle" | "launching" | "error">("idle");
 
   // ── Next Episode state ────────────────────────────────────────────────────
   const [showNextCard, setShowNextCard] = useState(false);
@@ -106,17 +121,14 @@ export function VideoPlayer({
   useEffect(() => {
     if (typeof window !== "undefined") {
       const isMobileTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-      setIsTouchDevice(isMobileTouch);
-
-      const hasPlatformParam = window.location.search.includes("platform=app");
-      const isCapacitorNative = Capacitor.getPlatform() !== "web";
-      const isSavedLocalNative = localStorage.getItem("isNativeApp") === "true";
-
-      if (hasPlatformParam || isCapacitorNative || isSavedLocalNative) {
-        localStorage.setItem("isNativeApp", "true");
-        setIsNative(true);
-      }
+      const native = rememberNativeApp();
+      const frame = requestAnimationFrame(() => {
+        setIsTouchDevice(isMobileTouch);
+        setIsNative(native);
+      });
+      return () => cancelAnimationFrame(frame);
     }
+    return undefined;
   }, []);
 
   // Sync fullscreen state based on document fullscreen API
@@ -166,7 +178,8 @@ export function VideoPlayer({
       switch (e.key) {
         case " ": case "k":
           e.preventDefault();
-          videoRef.current.paused ? videoRef.current.play() : videoRef.current.pause();
+          if (videoRef.current.paused) void videoRef.current.play();
+          else videoRef.current.pause();
           revealControls();
           break;
         case "ArrowLeft":
@@ -181,11 +194,17 @@ export function VideoPlayer({
           break;
         case "f": case "F":
           e.preventDefault();
-          handleToggleFullscreen();
+          if (document.fullscreenElement) {
+            void document.exitFullscreen();
+            setIsFullscreen(false);
+          } else if (containerRef.current) {
+            void containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+          }
           break;
         case "m": case "M":
           e.preventDefault();
-          handleToggleMute();
+          videoRef.current.muted = !videoRef.current.muted;
+          setIsMuted(videoRef.current.muted);
           break;
       }
     };
@@ -223,6 +242,14 @@ export function VideoPlayer({
       if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
     };
   }, [activeMedia.id]);
+
+  const clearNativeListeners = useCallback(() => {
+    const listeners = nativeListenersRef.current;
+    nativeListenersRef.current = [];
+    listeners.forEach((listener) => void listener.remove());
+  }, []);
+
+  useEffect(() => clearNativeListeners, [clearNativeListeners]);
 
   // ── Web Player event handlers ─────────────────────────────────────────────
   const handleLoadedMetadata = () => {
@@ -302,16 +329,17 @@ export function VideoPlayer({
   };
 
   // ── Action Handlers ───────────────────────────────────────────────────────
-  const handleTogglePlay = () => {
+  function handleTogglePlay() {
     if (!videoRef.current) return;
-    videoRef.current.paused ? videoRef.current.play() : videoRef.current.pause();
-  };
+    if (videoRef.current.paused) void videoRef.current.play();
+    else videoRef.current.pause();
+  }
 
-  const handleToggleMute = () => {
+  function handleToggleMute() {
     if (!videoRef.current) return;
     videoRef.current.muted = !videoRef.current.muted;
     setIsMuted(videoRef.current.muted);
-  };
+  }
 
   const handleVolumeChange = (val: number) => {
     if (!videoRef.current) return;
@@ -333,7 +361,7 @@ export function VideoPlayer({
     revealControls();
   };
 
-  const handleToggleFullscreen = () => {
+  function handleToggleFullscreen() {
     if (!containerRef.current) return;
     if (document.fullscreenElement) {
       document.exitFullscreen();
@@ -346,7 +374,7 @@ export function VideoPlayer({
         setIsFullscreen(!isFullscreen);
       });
     }
-  };
+  }
 
   const handleExitFullscreen = () => {
     if (document.fullscreenElement) {
@@ -381,6 +409,8 @@ export function VideoPlayer({
   // ── Capacitor Native Player Launcher (ExoPlayer) ──────────────────────────
   const startNativePlayer = async () => {
     if (!CapVideoPlayer) return;
+    clearNativeListeners();
+    setNativePlayerState("launching");
     try {
       const url = getAbsoluteStreamUrl();
 
@@ -393,25 +423,25 @@ export function VideoPlayer({
       }
 
       // Add native player event listeners to save progress in background
-      const pauseListener = await (CapVideoPlayer as any).addListener('jeepCapVideoPlayerPause', (data: any) => {
+      const nativePlayer = CapVideoPlayer as NativeVideoPlayer;
+      const pauseListener = await nativePlayer.addListener('jeepCapVideoPlayerPause', (data) => {
         if (data?.currentTime != null) {
           saveProgressAction(activeMedia.id, Math.floor(data.currentTime), false).catch(() => {});
         }
       });
-      const endedListener = await (CapVideoPlayer as any).addListener('jeepCapVideoPlayerEnded', () => {
+      const endedListener = await nativePlayer.addListener('jeepCapVideoPlayerEnded', () => {
         saveProgressAction(activeMedia.id, 0, true).catch(() => {});
       });
-      const exitListener = await (CapVideoPlayer as any).addListener('jeepCapVideoPlayerExit', (data: any) => {
+      const exitListener = await nativePlayer.addListener('jeepCapVideoPlayerExit', (data) => {
         if (data?.currentTime != null) {
           saveProgressAction(activeMedia.id, Math.floor(data.currentTime), false).catch(() => {});
         }
-        pauseListener.remove();
-        endedListener.remove();
-        exitListener.remove();
+        clearNativeListeners();
       });
+      nativeListenersRef.current = [pauseListener, endedListener, exitListener];
 
       // Init and play native ExoPlayer
-      const initOptions: any = {
+      const initOptions: capVideoPlayerOptions = {
         playerId: 'fullscreen',
         mode: 'fullscreen',
         url,
@@ -434,8 +464,11 @@ export function VideoPlayer({
       }
 
       await CapVideoPlayer.play({ playerId: 'fullscreen' });
+      setNativePlayerState("idle");
     } catch (err) {
       console.error("Failed to start native player:", err);
+      clearNativeListeners();
+      setNativePlayerState("error");
     }
   };
 
@@ -467,6 +500,7 @@ export function VideoPlayer({
               <img
                 src={activeMedia.backdropUrl}
                 alt=""
+                decoding="async"
                 className="absolute inset-0 w-full h-full object-cover opacity-20 filter blur-sm"
               />
             )}
@@ -487,11 +521,17 @@ export function VideoPlayer({
               </p>
               <button
                 onClick={startNativePlayer}
+                disabled={nativePlayerState === "launching"}
                 className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-red-600 text-white font-bold text-sm shadow-[0_0_20px_rgba(220,38,38,0.4)] hover:bg-red-500 hover:scale-[1.03] transition-all cursor-pointer"
               >
                 <Play className="h-5 w-5 fill-white" />
-                Play Natively
+                {nativePlayerState === "launching" ? "Opening Player..." : nativePlayerState === "error" ? "Retry Native Player" : "Play Natively"}
               </button>
+              {nativePlayerState === "error" && (
+                <p className="text-red-300 text-xs" role="alert">
+                  The native player could not open this stream. Retry or use Just Player below.
+                </p>
+              )}
             </div>
           </div>
         ) : (

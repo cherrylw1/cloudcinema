@@ -18,7 +18,7 @@ export function BottomNavBar() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 md:hidden flex h-16 items-center justify-around px-2 border-t"
+      className="app-bottom-nav fixed bottom-0 left-0 right-0 z-40 md:hidden flex h-16 items-center justify-around px-2 border-t"
       style={{
         background: "rgba(8, 8, 15, 0.85)",
         backdropFilter: "blur(40px) saturate(180%)",

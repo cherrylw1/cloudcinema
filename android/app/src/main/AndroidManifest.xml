@@ -32,13 +32,6 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="cloudcinema" android:host="auth-callback" />
             </intent-filter>
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="cloudcinema.vercel.app" />
-                <data android:scheme="http" android:host="cloudcinema.vercel.app" />
-            </intent-filter>
         </activity>
 
         <provider

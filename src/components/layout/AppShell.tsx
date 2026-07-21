@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -8,8 +8,7 @@ import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { SelectionProvider } from "@/providers/SelectionProvider";
 import { createClient } from "@/clients/supabase/browser";
 import { FluidBackground } from "@/components/ui/FluidBackground";
-import { AnimatePresence, motion } from "framer-motion";
-import { PreloadingScreen } from "@/components/common/PreloadingScreen";
+import { rememberNativeApp } from "@/lib/platform";
 
 interface AppShellProps {
   children: ReactNode;
@@ -17,59 +16,37 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isNative, setIsNative] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const handledAuthUrl = useRef<string | null>(null);
   const router = useRouter();
   const pathname = usePathname();
 
-  // Check if preloader has already run in this session
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    if (typeof window !== "undefined") {
-      const hasLoaded = sessionStorage.getItem("cherry_preloader_run");
-      if (hasLoaded) {
-        setIsLoading(false);
-      } else {
-        timer = setTimeout(() => {
-          setIsLoading(false);
-          sessionStorage.setItem("cherry_preloader_run", "true");
-        }, 2500); // 2.5 seconds loading duration matching progress animation
-      }
-    }
-
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
+    const native = rememberNativeApp();
+    const frame = requestAnimationFrame(() => setIsNative(native));
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("platform") === "app" || window.location.href.includes("platform=app")) {
-        localStorage.setItem("platform", "app");
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    const isNative = typeof window !== "undefined" && (
-      ((window as any).Capacitor && (window as any).Capacitor.isNativePlatform()) ||
-      (typeof navigator !== "undefined" && (navigator.userAgent.includes("CloudCinemaAndroid") || navigator.userAgent.includes("CloudCinemaIOS"))) ||
-      localStorage.getItem("platform") === "app"
-    );
     if (!isNative) return;
 
-    import("@capacitor/app").then(({ App }) => {
-      App.addListener("appUrlOpen", async (event) => {
-        const url = event.url;
+    let disposed = false;
+    const listeners: Array<{ remove: () => Promise<void> }> = [];
+
+    import("@capacitor/app").then(async ({ App }) => {
+      if (disposed) return;
+      const handleAuthUrl = async (url: string | undefined) => {
         if (!url) return;
 
         if (url.startsWith("cloudcinema://auth-callback")) {
-          const hashIndex = url.indexOf("#");
-          if (hashIndex === -1) return;
-          const hashString = url.substring(hashIndex + 1);
+          if (handledAuthUrl.current === url) return;
+          handledAuthUrl.current = url;
 
-          const params = new URLSearchParams(hashString);
+          const callbackUrl = new URL(url);
+          const params = callbackUrl.searchParams.size > 0
+            ? callbackUrl.searchParams
+            : new URLSearchParams(callbackUrl.hash.slice(1));
           const accessToken = params.get("access_token");
           const refreshToken = params.get("refresh_token");
 
@@ -81,33 +58,60 @@ export function AppShell({ children }: AppShellProps) {
                 refresh_token: refreshToken,
               });
               if (!error) {
-                router.push("/");
+                router.replace("/");
                 router.refresh();
+              } else {
+                handledAuthUrl.current = null;
               }
             } catch (err) {
+              handledAuthUrl.current = null;
               console.error("Error setting native session:", err);
             }
           }
         }
-      });
+      };
+
+      const launchUrl = await App.getLaunchUrl();
+      await handleAuthUrl(launchUrl?.url);
+      listeners.push(await App.addListener("appUrlOpen", (event) => handleAuthUrl(event.url)));
+
+      listeners.push(await App.addListener("backButton", ({ canGoBack }) => {
+        if (isSidebarOpen) {
+          setIsSidebarOpen(false);
+        } else if (canGoBack || pathname !== "/") {
+          router.back();
+        } else {
+          App.exitApp();
+        }
+      }));
     });
-  }, [router]);
+
+    return () => {
+      disposed = true;
+      listeners.forEach((listener) => void listener.remove());
+    };
+  }, [isNative, isSidebarOpen, pathname, router]);
+
+  useEffect(() => {
+    if (!isNative) return;
+    const updateConnection = () => setIsOffline(!navigator.onLine);
+    updateConnection();
+    window.addEventListener("online", updateConnection);
+    window.addEventListener("offline", updateConnection);
+    return () => {
+      window.removeEventListener("online", updateConnection);
+      window.removeEventListener("offline", updateConnection);
+    };
+  }, [isNative]);
 
   return (
     <SelectionProvider>
-      <AnimatePresence mode="wait">
-        {isLoading ? (
-          <PreloadingScreen key="preloader" />
-        ) : (
-          <motion.div
-            key="app-content"
-            initial={{ opacity: 0, y: 12, filter: "blur(6px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            transition={{ duration: 0.8, ease: [0.25, 1, 0.5, 1] }}
-            className="min-h-screen bg-background text-foreground transition-colors duration-300 relative"
-          >
+      <div
+        className="min-h-screen bg-background text-foreground transition-colors duration-300 relative"
+        data-native-app={isNative ? "true" : "false"}
+      >
             {/* Dynamic ambient fluid background blobs (Drifting lava lamp nebula) */}
-            <FluidBackground />
+            {!isNative && <FluidBackground />}
 
             {/* Sidebar Navigation */}
             <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
@@ -116,6 +120,13 @@ export function AppShell({ children }: AppShellProps) {
             <div className="flex flex-col min-h-screen md:pl-64 relative z-10">
               {/* Top Navigation */}
               <TopBar onOpenSidebar={() => setIsSidebarOpen(true)} />
+
+              {isOffline && (
+                <div className="native-offline-banner" role="status">
+                  You are offline. Reconnect to load your library.
+                  <button type="button" onClick={() => window.location.reload()}>Retry</button>
+                </div>
+              )}
 
               {/* Content Container */}
               <main 
@@ -128,9 +139,7 @@ export function AppShell({ children }: AppShellProps) {
 
             {/* Mobile Bottom Navigation Bar */}
             <BottomNavBar />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </div>
     </SelectionProvider>
   );
 }

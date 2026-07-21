@@ -66,7 +66,7 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-14 w-full items-center justify-between px-5"
+      className="app-top-bar sticky top-0 z-30 flex h-14 w-full items-center justify-between px-5"
       style={{
         background: "rgba(8, 8, 15, 0.75)",
         backdropFilter: "blur(40px) saturate(180%)",

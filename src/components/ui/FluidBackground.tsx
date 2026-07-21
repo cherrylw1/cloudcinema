@@ -1,18 +1,6 @@
-"use client";
-
-import { useEffect, useState } from "react";
-
 export function FluidBackground() {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) return null;
-
   return (
-    <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none select-none opacity-45 dark:opacity-30 transition-opacity duration-1000">
+    <div className="fluid-background fixed inset-0 z-0 overflow-hidden pointer-events-none select-none opacity-45 dark:opacity-30 transition-opacity duration-1000">
       {/* Morphing color blobs container */}
       <div className="absolute inset-0 bg-transparent blur-[120px] saturate-[180%] transform-gpu">
         {/* Blob 1: Deep Royal Indigo */}
