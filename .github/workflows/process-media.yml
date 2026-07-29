@@ -8,9 +8,11 @@ on:
         required: true
         default: "batch"
         type: string
+  schedule:
+    - cron: "*/5 * * * *"
 
 concurrency:
-  group: media-${{ inputs.media_id }}
+  group: media-${{ inputs.media_id || 'batch' }}
   cancel-in-progress: false
 
 jobs:
@@ -52,4 +54,4 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-        run: npx tsx scripts/process-media-runner.ts "${{ inputs.media_id }}"
+        run: npx tsx scripts/process-media-runner.ts "${{ inputs.media_id || 'batch' }}"

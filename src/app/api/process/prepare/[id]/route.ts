@@ -8,6 +8,7 @@ interface BrowserPreparation {
   state: "queued" | "processing" | "failed";
   requestedAt: string;
   attempt: number;
+  delivery?: "queue";
 }
 
 export async function POST(
@@ -63,27 +64,20 @@ export async function POST(
   const hasActiveBrowserJob =
     preparation?.state === "queued" || preparation?.state === "processing";
   const attemptsExhausted =
-    preparation?.state === "failed" && preparation.attempt >= 2;
+    preparation?.delivery === "queue" &&
+    preparation.state === "failed" &&
+    preparation.attempt >= 2;
 
   // 4. Queue browser preparation when HLS is missing. Existing processed MP4s
   // are reused by the runner and remain untouched for external players.
   if (!browserPlaybackReady && !hasActiveBrowserJob && !attemptsExhausted) {
-    if (!env.githubPat) {
-      console.error("[Prepare API] Trigger failed: GITHUB_PAT env variable is not set.");
-      return NextResponse.json(
-        { error: "GitHub integration is not configured on the server." },
-        { status: 500 }
-      );
-    }
-
-    console.log(`[Prepare API] Triggering GitHub Actions workflow for Media: ${id}`);
-    
     try {
       // Queue first; the worker atomically claims queued jobs as processing.
       const browserPreparation: BrowserPreparation = {
         state: "queued",
         requestedAt: new Date().toISOString(),
         attempt: (preparation?.attempt || 0) + 1,
+        delivery: "queue",
       };
       const { error: updateError } = await supabase
         .from("media_library")
@@ -99,55 +93,38 @@ export async function POST(
         .eq("id", id);
 
       if (updateError) throw updateError;
+      status = "queued";
 
-      const githubRes = await fetch(
-        "https://api.github.com/repos/cherrylw1/cloudcinema/actions/workflows/process-media.yml/dispatches",
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${env.githubPat}`,
-            "Accept": "application/vnd.github.v3+json",
-            "Content-Type": "application/json",
-            "User-Agent": "CloudCinema-App",
-          },
-          body: JSON.stringify({
-            ref: "main",
-            inputs: {
-              media_id: id,
+      // Instant dispatch is an optimization. The scheduled workflow also drains
+      // this queue, so an expired or missing PAT cannot strand browser playback.
+      if (env.githubPat) {
+        const githubRes = await fetch(
+          "https://api.github.com/repos/cherrylw1/cloudcinema/actions/workflows/process-media.yml/dispatches",
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${env.githubPat}`,
+              "Accept": "application/vnd.github.v3+json",
+              "Content-Type": "application/json",
+              "User-Agent": "CloudCinema-App",
             },
-          }),
-        }
-      );
-
-      if (!githubRes.ok) {
-        const errorText = await githubRes.text();
-        console.error(`[Prepare API] GitHub dispatch failed: Status ${githubRes.status} - ${errorText}`);
-        
-        // Preserve the attempt so repeated page polls cannot dispatch forever.
-        await supabase
-          .from("media_library")
-          .update({
-            processing_status: "failed",
-            audio_streams: {
-              ...streamMetadata,
-              version: 2,
-              tracks: streamMetadata.tracks || [],
-              browserPreparation: {
-                ...browserPreparation,
-                state: "failed",
+            body: JSON.stringify({
+              ref: "main",
+              inputs: {
+                media_id: id,
               },
-            },
-          })
-          .eq("id", id);
-
-        return NextResponse.json(
-          { error: "Failed to dispatch media processing job." },
-          { status: 502 }
+            }),
+          },
         );
+        if (!githubRes.ok) {
+          console.error(
+            `[Prepare API] Instant dispatch failed (${githubRes.status}); scheduled queue will retry.`,
+          );
+        }
+      } else {
+        console.warn("[Prepare API] GITHUB_PAT is unavailable; using scheduled queue.");
       }
 
-      status = "queued";
-      console.log(`[Prepare API] Successfully dispatched workflow for Media: ${id}`);
     } catch (err) {
       console.error("[Prepare API] Exception during dispatch:", err);
       const failedPreparation: BrowserPreparation = {

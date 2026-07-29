@@ -80,8 +80,8 @@ async function main() {
         // Fetch pool of pending items
         const { data: pendingItems, error: fetchError } = await supabase
           .from("media_library")
-          .select("id, drive_file_id, title")
-          .eq("processing_status", "none")
+          .select("*")
+          .eq("processing_status", "queued")
           .order("created_at", { ascending: true })
           .limit(10);
 
@@ -97,8 +97,8 @@ async function main() {
             .from("media_library")
             .update({ processing_status: "processing" })
             .eq("id", item.id)
-            .eq("processing_status", "none")
-            .select("id, drive_file_id, title")
+            .eq("processing_status", "queued")
+            .select("*")
             .maybeSingle();
 
           if (!error && data) {
@@ -115,13 +115,16 @@ async function main() {
 
         console.log(`[Shard ${shardIndex}] Claimed Media ID: ${claimedItem.id}, Title: ${claimedItem.title}`);
         try {
-          await processSingleMedia(claimedItem.id, claimedItem.drive_file_id, claimedItem.title, supabase, drive, accessToken, googleDriveFolderId);
+          await processClaimedMedia(
+            claimedItem,
+            supabase,
+            drive,
+            accessToken,
+            googleDriveFolderId,
+          );
         } catch (err) {
           console.error(`[Shard ${shardIndex}] Error processing claimed item ${claimedItem.id}:`, err);
-          await supabase
-            .from("media_library")
-            .update({ processing_status: "failed" })
-            .eq("id", claimedItem.id);
+          await setBrowserPreparationState(supabase, claimedItem, "failed");
         }
       }
     } else {
@@ -142,23 +145,13 @@ async function main() {
 
       console.log(`[Shard ${shardIndex}] Processing single claimed Media: ${claimedItem.title}`);
       try {
-        await setBrowserPreparationState(supabase, claimedItem, "processing");
-        if (claimedItem.audio_streams?.browserHls) {
-          await supabase
-            .from("media_library")
-            .update({ processing_status: "ready" })
-            .eq("id", claimedItem.id);
-        } else if (claimedItem.processed_drive_file_id) {
-          await prepareHlsFromExistingVariants(
-            claimedItem,
-            supabase,
-            drive,
-            accessToken,
-            googleDriveFolderId,
-          );
-        } else {
-          await processSingleMedia(claimedItem.id, claimedItem.drive_file_id, claimedItem.title, supabase, drive, accessToken, googleDriveFolderId);
-        }
+        await processClaimedMedia(
+          claimedItem,
+          supabase,
+          drive,
+          accessToken,
+          googleDriveFolderId,
+        );
       } catch (error) {
         await setBrowserPreparationState(supabase, claimedItem, "failed");
         throw error;
@@ -169,6 +162,40 @@ async function main() {
   } catch (err: any) {
     console.error(`[Shard ${shardIndex}] Fatal execution error:`, err);
     process.exit(1);
+  }
+}
+
+async function processClaimedMedia(
+  media: any,
+  supabase: any,
+  drive: any,
+  accessToken: string,
+  googleDriveFolderId: string,
+) {
+  await setBrowserPreparationState(supabase, media, "processing");
+  if (media.audio_streams?.browserHls) {
+    await supabase
+      .from("media_library")
+      .update({ processing_status: "ready" })
+      .eq("id", media.id);
+  } else if (media.processed_drive_file_id) {
+    await prepareHlsFromExistingVariants(
+      media,
+      supabase,
+      drive,
+      accessToken,
+      googleDriveFolderId,
+    );
+  } else {
+    await processSingleMedia(
+      media.id,
+      media.drive_file_id,
+      media.title,
+      supabase,
+      drive,
+      accessToken,
+      googleDriveFolderId,
+    );
   }
 }
 
