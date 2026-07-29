@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/clients/supabase/server";
 
-const HANDOFF_PATTERN =
-  /^(?<port>\d{4,5}):(?<nonce>[0-9a-f]{8}-[0-9a-f-]{27,})$/i;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const handoff = request.cookies.get("cc_mac_handoff")?.value;
-  const match = handoff?.match(HANDOFF_PATTERN);
-  const port = Number(match?.groups?.port);
-  const nonce = match?.groups?.nonce;
+  const [portValue, nonce] = handoff?.split(":") ?? [];
+  const port = Number(portValue);
 
-  if (code && nonce && port >= 1024 && port <= 65535) {
+  if (code && nonce && UUID_PATTERN.test(nonce) && port >= 1024 && port <= 65535) {
     try {
       const supabase = await createClient();
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
