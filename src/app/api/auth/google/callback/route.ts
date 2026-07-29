@@ -5,13 +5,21 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const next = requestUrl.searchParams.get("next") ?? "/";
-  const isNative = requestUrl.searchParams.get("source") === "app";
+  const source = requestUrl.searchParams.get("source");
+  const isNative = source === "app";
+  const isMac = source === "mac";
 
   if (code) {
     try {
       const supabase = await createClient();
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (!error && data?.session) {
+        if (isMac) {
+          const callbackUrl = new URL("cloudcinema-mac://auth-callback");
+          callbackUrl.searchParams.set("access_token", data.session.access_token);
+          callbackUrl.searchParams.set("refresh_token", data.session.refresh_token);
+          return NextResponse.redirect(callbackUrl, 302);
+        }
         if (isNative) {
           const session = new URLSearchParams({
             access_token: data.session.access_token,
@@ -32,6 +40,11 @@ export async function GET(request: Request) {
 
   // Redirect to login page on failure
   return NextResponse.redirect(
-    new URL(`/login?error=oauth_failed${isNative ? "&platform=app" : ""}`, request.url)
+    new URL(
+      `/login?error=oauth_failed${
+        isNative ? "&platform=app" : isMac ? "&platform=mac" : ""
+      }`,
+      request.url,
+    )
   );
 }

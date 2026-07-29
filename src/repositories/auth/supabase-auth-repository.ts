@@ -58,11 +58,13 @@ export class SupabaseAuthRepository implements AuthRepository {
   async signInWithGoogle(): Promise<void> {
     const supabase = this.getSupabase();
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    
-    const isNative = isNativeApp();
+    const isMac =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("platform") === "mac";
+    const isNative = isNativeApp() || isMac;
 
     const redirectTo = isNative
-      ? `${origin}/api/auth/google/callback?source=app`
+      ? `${origin}/api/auth/google/callback?source=${isMac ? "mac" : "app"}`
       : `${origin}/api/auth/google/callback`;
 
     const { data, error } = await supabase.auth.signInWithOAuth({
