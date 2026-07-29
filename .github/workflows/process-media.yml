@@ -1,58 +1,55 @@
-name: Offloaded Media Processor
+name: On-demand Browser Media Processor
 
 on:
   workflow_dispatch:
     inputs:
       media_id:
-        description: 'The Supabase Media ID to transcode and process (leave empty or use "batch" to process queue)'
-        required: false
-        default: 'batch'
+        description: "Supabase media ID to prepare, or batch"
+        required: true
+        default: "batch"
         type: string
+
+concurrency:
+  group: media-${{ inputs.media_id }}
+  cancel-in-progress: false
 
 jobs:
   process-media:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        shard: [1, 2, 3, 4, 5]
-      fail-fast: false
-      max-parallel: 5
+    timeout-minutes: 360
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies
+      - name: Install FFmpeg
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg curl tar wget
 
       - name: Install dovi_tool
         run: |
-          # Fetch dovi_tool binary release and make it executable globally
           wget -q https://github.com/quietvoid/dovi_tool/releases/download/2.3.2/dovi_tool-2.3.2-x86_64-unknown-linux-musl.tar.gz
           tar -xzf dovi_tool-2.3.2-x86_64-unknown-linux-musl.tar.gz
           sudo mv dovi_tool /usr/local/bin/
-          rm dovi_tool-2.3.2-x86_64-unknown-linux-musl.tar.gz
           dovi_tool --version
 
-
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+          cache: npm
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Execute Media Processing Runner
+      - name: Prepare browser playback
         env:
-          SHARD_INDEX: ${{ matrix.shard }}
+          SHARD_INDEX: "1"
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-        run: npx tsx scripts/process-media-runner.ts "${{ github.event.inputs.media_id }}"
+        run: npx tsx scripts/process-media-runner.ts "${{ inputs.media_id }}"

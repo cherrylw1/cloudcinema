@@ -1,8 +1,28 @@
 import { createClient } from "@/clients/supabase/server";
-import type { Media, MediaRepository, AudioStream, SubtitleStream, AudioVariant, SubtitleTrack } from "./index";
+import type {
+  Media,
+  MediaRepository,
+  AudioStream,
+  SubtitleStream,
+  AudioVariant,
+  SubtitleTrack,
+  HlsManifest,
+  StreamMetadata,
+} from "./index";
 import type { Database } from "@/types/database";
 
 type MediaRow = Database["public"]["Tables"]["media_library"]["Row"];
+
+function streamMetadata(value: unknown) {
+  if (Array.isArray(value)) {
+    return { tracks: value as AudioStream[], browserHls: null };
+  }
+  const metadata = value as Partial<StreamMetadata> | null;
+  return {
+    tracks: metadata?.tracks ?? null,
+    browserHls: metadata?.browserHls ?? null,
+  };
+}
 
 export class SupabaseMediaRepository implements MediaRepository {
   async getMediaList(options?: {
@@ -44,33 +64,37 @@ export class SupabaseMediaRepository implements MediaRepository {
       throw error;
     }
 
-    return (data || []).map((row: MediaRow) => ({
-      id: row.id,
-      driveFileId: row.drive_file_id,
-      title: row.title,
-      series: row.series,
-      season: row.season,
-      episode: row.episode,
-      mediaType: row.media_type,
-      posterUrl: row.poster_url,
-      backdropUrl: row.backdrop_url,
-      overview: row.overview,
-      runtime: row.runtime,
-      fileSize: row.file_size,
-      tmdbId: row.tmdb_id,
-      mimeType: row.mime_type,
-      dvProfile: row.dv_profile,
-      audioCodec: row.audio_codec,
-      audioStreams: (row.audio_streams as AudioStream[] | null) ?? null,
-      subtitleStreams: (row.subtitle_streams as SubtitleStream[] | null) ?? null,
-      processingStatus: row.processing_status,
-      audioVariants: (row.audio_variants as AudioVariant[] | null) ?? null,
-      subtitleTracks: (row.subtitle_tracks as SubtitleTrack[] | null) ?? null,
-      processedDriveFileId: row.processed_drive_file_id,
-      folderPath: row.folder_path,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    return (data || []).map((row: MediaRow) => {
+      const streams = streamMetadata(row.audio_streams);
+      return {
+        id: row.id,
+        driveFileId: row.drive_file_id,
+        title: row.title,
+        series: row.series,
+        season: row.season,
+        episode: row.episode,
+        mediaType: row.media_type,
+        posterUrl: row.poster_url,
+        backdropUrl: row.backdrop_url,
+        overview: row.overview,
+        runtime: row.runtime,
+        fileSize: row.file_size,
+        tmdbId: row.tmdb_id,
+        mimeType: row.mime_type,
+        dvProfile: row.dv_profile,
+        audioCodec: row.audio_codec,
+        audioStreams: streams.tracks,
+        subtitleStreams: (row.subtitle_streams as SubtitleStream[] | null) ?? null,
+        processingStatus: row.processing_status,
+        audioVariants: (row.audio_variants as AudioVariant[] | null) ?? null,
+        subtitleTracks: (row.subtitle_tracks as SubtitleTrack[] | null) ?? null,
+        hlsManifest: streams.browserHls as HlsManifest | null,
+        processedDriveFileId: row.processed_drive_file_id,
+        folderPath: row.folder_path,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    });
   }
 
   async getMediaById(id: string): Promise<Media | null> {
@@ -87,6 +111,7 @@ export class SupabaseMediaRepository implements MediaRepository {
 
     if (!data) return null;
 
+    const streams = streamMetadata(data.audio_streams);
     return {
       id: data.id,
       driveFileId: data.drive_file_id,
@@ -104,11 +129,12 @@ export class SupabaseMediaRepository implements MediaRepository {
       mimeType: data.mime_type,
       dvProfile: data.dv_profile,
       audioCodec: data.audio_codec,
-      audioStreams: (data.audio_streams as AudioStream[] | null) ?? null,
+      audioStreams: streams.tracks,
       subtitleStreams: (data.subtitle_streams as SubtitleStream[] | null) ?? null,
       processingStatus: data.processing_status,
       audioVariants: (data.audio_variants as AudioVariant[] | null) ?? null,
       subtitleTracks: (data.subtitle_tracks as SubtitleTrack[] | null) ?? null,
+      hlsManifest: streams.browserHls as HlsManifest | null,
       processedDriveFileId: data.processed_drive_file_id,
       folderPath: data.folder_path,
       createdAt: data.created_at,

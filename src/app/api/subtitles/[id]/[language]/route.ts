@@ -43,7 +43,12 @@ export async function GET(
   }
 
   const tracks = (media.subtitle_tracks as unknown as SubtitleTrack[]) || [];
-  const track = tracks.find((t: SubtitleTrack) => t.language?.toLowerCase() === language.toLowerCase());
+  const decodedTrack = decodeURIComponent(language);
+  const track = tracks.find(
+    (item: SubtitleTrack) =>
+      item.id?.toLowerCase() === decodedTrack.toLowerCase() ||
+      item.language?.toLowerCase() === decodedTrack.toLowerCase(),
+  );
 
   if (!track || !track.content) {
     return NextResponse.json({ error: `Subtitle track for language "${language}" not found.` }, { status: 404 });

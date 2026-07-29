@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import type { Media, SubtitleTrack } from "@/repositories/media";
+import Hls from "hls.js";
+import type { Media, SubtitleTrack, HlsManifest } from "@/repositories/media";
 import type { UserProgress } from "@/repositories/progress";
 import { saveProgressAction } from "@/server/actions/progress-actions";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   ExternalLink, Copy, Check, Subtitles, Languages, Info,
-  RotateCcw, RotateCw, ArrowLeft
+  RotateCcw, RotateCw, ArrowLeft, SlidersHorizontal, PictureInPicture2,
 } from "lucide-react";
 
 // Safe static imports for Capacitor
@@ -79,6 +80,7 @@ export function VideoPlayer({
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nativeListenersRef = useRef<Array<{ remove: () => Promise<void> }>>([]);
+  const hlsRef = useRef<Hls | null>(null);
   const initialSeekDone = useRef(false);
   const lastSavedTime = useRef<number>(0);
   const seekTargetRef = useRef<number | null>(null);
@@ -95,6 +97,20 @@ export function VideoPlayer({
     media.processedDriveFileId || media.driveFileId
   );
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
+  const [hlsManifest, setHlsManifest] = useState<HlsManifest | null>(
+    media.hlsManifest ?? null,
+  );
+  const [hlsAudioTracks, setHlsAudioTracks] = useState<
+    Array<{ id: number; name: string; lang?: string }>
+  >([]);
+  const [selectedHlsAudio, setSelectedHlsAudio] = useState(0);
+  const [qualityLevels, setQualityLevels] = useState<
+    Array<{ index: number; label: string }>
+  >([]);
+  const [selectedQuality, setSelectedQuality] = useState(-1);
+  const [browserPreparation, setBrowserPreparation] = useState(
+    media.hlsManifest ? "ready" : media.processingStatus,
+  );
   const [copied, setCopied] = useState(false);
 
   // ── Player UI state ───────────────────────────────────────────────────────
@@ -104,7 +120,7 @@ export function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [openMenu, setOpenMenu] = useState<"subs" | "audio" | null>(null);
+  const [openMenu, setOpenMenu] = useState<"subs" | "audio" | "quality" | null>(null);
 
   // ── Fullscreen state (prevents dynamic layout resizing issues) ───────────
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -163,10 +179,151 @@ export function VideoPlayer({
     }, 4000);
   }, []);
 
-  // Silence background prepare trigger
+  // Trigger on-demand browser preparation and adopt HLS without reloading the page.
   useEffect(() => {
-    fetch(`/api/process/prepare/${media.id}`, { method: "POST" }).catch(() => {});
-  }, [media.id]);
+    if (isNative || hlsManifest) return;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const checkPreparation = async () => {
+      try {
+        const response = await fetch(`/api/process/prepare/${media.id}`, {
+          method: "POST",
+        });
+        if (!response.ok) throw new Error(`Preparation failed (${response.status})`);
+        const result = await response.json();
+        if (disposed) return;
+
+        setBrowserPreparation(result.status || "none");
+        const prepared = result.media?.audio_streams?.browserHls as
+          | HlsManifest
+          | undefined;
+        if (prepared?.video) {
+          if (videoRef.current) {
+            seekTargetRef.current = videoRef.current.currentTime;
+          }
+          setHlsManifest(prepared);
+          setBrowserPreparation("ready");
+          return;
+        }
+      } catch {
+        if (!disposed) setBrowserPreparation("failed");
+      }
+
+      if (!disposed) timer = setTimeout(checkPreparation, 10_000);
+    };
+
+    void checkPreparation();
+    return () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [hlsManifest, isNative, media.id]);
+
+  // HLS is browser-only. Native and external players keep their original MP4 URLs.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (isNative || !hlsManifest || !video) return;
+
+    const source = `/api/hls/${activeMedia.id}/master.m3u8`;
+    if (!Hls.isSupported()) {
+      if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = source;
+      }
+      return;
+    }
+
+    const hls = new Hls({
+      enableWorker: true,
+      backBufferLength: 60,
+      maxBufferLength: 30,
+      capLevelToPlayerSize: true,
+    });
+    hlsRef.current = hls;
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(source));
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      const tracks = hls.audioTracks.map((track, index) => ({
+        id: index,
+        name: track.name || track.lang || `Track ${index + 1}`,
+        lang: track.lang,
+      }));
+      setHlsAudioTracks(tracks);
+      setQualityLevels(
+        hls.levels.map((level, index) => ({
+          index,
+          label: level.height ? `${level.height}p` : `Quality ${index + 1}`,
+        })),
+      );
+
+      const preferredAudio = localStorage.getItem("cloudcinema.audioLanguage");
+      const preferredIndex = preferredAudio
+        ? tracks.findIndex((track) => track.lang === preferredAudio)
+        : -1;
+      if (preferredIndex >= 0) {
+        hls.audioTrack = preferredIndex;
+        setSelectedHlsAudio(preferredIndex);
+      }
+      void video.play().catch(() => {});
+    });
+    hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (_event, data) => {
+      setSelectedHlsAudio(data.id);
+    });
+    hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
+      if (hls.autoLevelEnabled) setSelectedQuality(-1);
+      else setSelectedQuality(data.level);
+    });
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      if (!data.fatal) return;
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        hls.startLoad();
+      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        hls.recoverMediaError();
+      } else {
+        setBrowserPreparation("failed");
+      }
+    });
+
+    return () => {
+      hls.destroy();
+      if (hlsRef.current === hls) hlsRef.current = null;
+    };
+  }, [activeMedia.id, hlsManifest, isNative]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const tracks = Array.from(video.textTracks);
+    tracks.forEach((track, index) => {
+      const metadata = activeMedia.subtitleTracks?.[index];
+      const key = metadata?.id || metadata?.language;
+      track.mode = selectedSubtitle !== "off" && key === selectedSubtitle
+        ? "showing"
+        : "disabled";
+    });
+
+    if (selectedSubtitle !== "off") {
+      const selected = activeMedia.subtitleTracks?.find(
+        (track) => (track.id || track.language) === selectedSubtitle,
+      );
+      if (selected) {
+        localStorage.setItem("cloudcinema.subtitleLanguage", selected.language);
+      }
+    }
+  }, [activeMedia.subtitleTracks, selectedSubtitle]);
+
+  useEffect(() => {
+    if (!activeMedia.subtitleTracks?.length || selectedSubtitle !== "off") return;
+    const preferredLanguage = localStorage.getItem("cloudcinema.subtitleLanguage");
+    const preferred = preferredLanguage
+      ? activeMedia.subtitleTracks.find((track) => track.language === preferredLanguage)
+      : activeMedia.subtitleTracks.find((track) => track.forced);
+    if (!preferred) return;
+    const frame = requestAnimationFrame(() => {
+      setSelectedSubtitle(preferred.id || preferred.language);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeMedia.subtitleTracks, selectedSubtitle]);
 
   // Keyboard shortcuts (web player only)
   useEffect(() => {
@@ -392,6 +549,41 @@ export function VideoPlayer({
     setOpenMenu(null);
   };
 
+  const handleFallbackAudioClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const driveFileId = event.currentTarget.dataset.driveFileId;
+    if (driveFileId) handleAudioChange(driveFileId);
+  };
+
+  const handleHlsAudioChange = (index: number) => {
+    const hls = hlsRef.current;
+    if (!hls) return;
+    hls.audioTrack = index;
+    setSelectedHlsAudio(index);
+    const language = hlsAudioTracks[index]?.lang;
+    if (language) localStorage.setItem("cloudcinema.audioLanguage", language);
+    setOpenMenu(null);
+  };
+
+  const handleQualityChange = (index: number) => {
+    const hls = hlsRef.current;
+    if (!hls) return;
+    hls.currentLevel = index;
+    setSelectedQuality(index);
+    setOpenMenu(null);
+  };
+
+  const handlePictureInPicture = async () => {
+    const video = videoRef.current;
+    if (!video || !document.pictureInPictureEnabled) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        await video.requestPictureInPicture();
+      }
+    } catch {}
+  };
+
   const navigateToNext = useCallback(() => {
     if (!nextEpisode) return;
     if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
@@ -539,15 +731,34 @@ export function VideoPlayer({
           <>
             <video
               ref={videoRef}
-              src={streamUrl}
+              src={hlsManifest ? undefined : streamUrl}
               autoPlay
+              playsInline
               className="w-full h-full object-contain"
               onLoadedMetadata={handleLoadedMetadata}
               onTimeUpdate={handleTimeUpdate}
               onEnded={handleEnded}
               onPlay={() => { setIsPlaying(true); revealControls(); }}
               onPause={() => { setIsPlaying(false); setControlsVisible(true); }}
-            />
+            >
+              {(activeMedia.subtitleTracks || []).map((track, index) => (
+                <track
+                  key={track.id || `${track.language}-${index}`}
+                  kind="subtitles"
+                  src={`/api/subtitles/${activeMedia.id}/${encodeURIComponent(track.id || track.language)}`}
+                  srcLang={track.language}
+                  label={track.label || formatLanguage(track.language)}
+                />
+              ))}
+            </video>
+
+            {browserPreparation !== "ready" && (
+              <div className="absolute top-5 right-5 rounded-md bg-black/70 px-3 py-1.5 text-[11px] font-medium text-white/70 pointer-events-none">
+                {browserPreparation === "failed"
+                  ? "Browser preparation will retry"
+                  : "Preparing enhanced browser playback"}
+              </div>
+            )}
 
             {/* ── Controls Overlay ── */}
             <div
@@ -747,17 +958,17 @@ export function VideoPlayer({
                           </p>
                           <div className="max-h-60 overflow-y-auto py-1">
                             {[
-                              { language: "off", label: "Off" },
-                              ...(activeMedia.subtitleTracks || []).map((t: SubtitleTrack) => ({
-                                language: t.language,
-                                label: formatLanguage(t.language),
+                              { key: "off", label: "Off" },
+                              ...(activeMedia.subtitleTracks || []).map((t: SubtitleTrack, index) => ({
+                                key: t.id || t.language || `track-${index}`,
+                                label: `${t.label || formatLanguage(t.language)}${t.forced ? " · Forced" : ""}`,
                               })),
                             ].map((opt) => (
                               <button
-                                key={opt.language}
-                                onClick={() => { setSelectedSubtitle(opt.language); setOpenMenu(null); }}
+                                key={opt.key}
+                                onClick={() => { setSelectedSubtitle(opt.key); setOpenMenu(null); }}
                                 className={`w-full text-left px-3.5 py-2.5 text-xs transition-colors cursor-pointer ${
-                                  selectedSubtitle === opt.language
+                                  selectedSubtitle === opt.key
                                     ? "bg-red-600/25 text-white font-bold"
                                     : "text-white/65 hover:bg-white/10 hover:text-white"
                                 }`}
@@ -788,14 +999,29 @@ export function VideoPlayer({
                             Audio Track
                           </p>
                           <div className="max-h-60 overflow-y-auto py-1">
-                            {[
+                            {hlsManifest && hlsAudioTracks.length > 0 ? (
+                              hlsAudioTracks.map((track) => (
+                                <button
+                                  key={track.id}
+                                  onClick={() => handleHlsAudioChange(track.id)}
+                                  className={`w-full text-left px-3.5 py-2.5 text-xs transition-colors cursor-pointer ${
+                                    selectedHlsAudio === track.id
+                                      ? "bg-red-600/25 text-white font-bold"
+                                      : "text-white/65 hover:bg-white/10 hover:text-white"
+                                  }`}
+                                >
+                                  {track.name}
+                                </button>
+                              ))
+                            ) : [
                               { driveFileId: activeMedia.processedDriveFileId || activeMedia.driveFileId, language: "default" },
-                              ...(activeMedia.audioVariants || [])
+                              ...(activeMedia.audioVariants || []),
                             ].filter((v, idx, self) => self.findIndex(t => t.driveFileId === v.driveFileId) === idx)
                             .map((v) => (
-                              <button
-                                key={v.driveFileId}
-                                onClick={() => handleAudioChange(v.driveFileId)}
+                                <button
+                                  key={v.driveFileId}
+                                  data-drive-file-id={v.driveFileId}
+                                  onClick={handleFallbackAudioClick}
                                 className={`w-full text-left px-3.5 py-2.5 text-xs transition-colors cursor-pointer ${
                                   selectedAudioVariant === v.driveFileId
                                     ? "bg-red-600/25 text-white font-bold"
@@ -809,6 +1035,55 @@ export function VideoPlayer({
                         </div>
                       )}
                     </div>
+
+                    {hlsManifest && qualityLevels.length > 0 && (
+                      <div className="relative">
+                        <button
+                          onClick={() => setOpenMenu(m => m === "quality" ? null : "quality")}
+                          className={`p-2 rounded-lg flex items-center justify-center transition-colors cursor-pointer bg-white/5 hover:bg-white/15 ${openMenu === "quality" ? "bg-white/15 text-white" : "text-white/60 hover:text-white"}`}
+                          title="Playback Quality"
+                        >
+                          <SlidersHorizontal className="h-5 w-5" />
+                        </button>
+                        {openMenu === "quality" && (
+                          <div
+                            className="absolute bottom-12 right-0 w-44 rounded-xl overflow-hidden border border-white/10 shadow-2xl z-50"
+                            style={{ background: "rgba(18,18,18,0.96)" }}
+                          >
+                            <p className="text-[10px] font-bold uppercase text-white/40 px-3 pt-3 pb-1 border-b border-white/5">
+                              Quality
+                            </p>
+                            <div className="py-1">
+                              <button
+                                onClick={() => handleQualityChange(-1)}
+                                className={`w-full text-left px-3.5 py-2.5 text-xs ${selectedQuality === -1 ? "bg-red-600/25 text-white font-bold" : "text-white/65 hover:bg-white/10"}`}
+                              >
+                                Auto
+                              </button>
+                              {qualityLevels.map((level) => (
+                                <button
+                                  key={level.index}
+                                  onClick={() => handleQualityChange(level.index)}
+                                  className={`w-full text-left px-3.5 py-2.5 text-xs ${selectedQuality === level.index ? "bg-red-600/25 text-white font-bold" : "text-white/65 hover:bg-white/10"}`}
+                                >
+                                  {level.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {typeof document !== "undefined" && document.pictureInPictureEnabled && (
+                      <button
+                        onClick={handlePictureInPicture}
+                        className="p-2 rounded-lg text-white/60 hover:text-white bg-white/5 hover:bg-white/15 transition-colors cursor-pointer"
+                        title="Picture in Picture"
+                      >
+                        <PictureInPicture2 className="h-5 w-5" />
+                      </button>
+                    )}
 
                     {/* Fullscreen Toggle */}
                     <button

@@ -43,9 +43,14 @@ export async function POST(
   }
 
   let status = media.processing_status || "none";
+  const streamMetadata = media.audio_streams as {
+    browserHls?: unknown;
+  } | null;
+  const browserPlaybackReady = Boolean(streamMetadata?.browserHls);
 
-  // 4. Trigger GitHub Actions workflow if the status is 'none'
-  if (status === "none") {
+  // 4. Queue browser preparation when HLS is missing. Existing processed MP4s
+  // are reused by the runner and remain untouched for external players.
+  if (!browserPlaybackReady && !["queued", "processing"].includes(status)) {
     if (!env.githubPat) {
       console.error("[Prepare API] Trigger failed: GITHUB_PAT env variable is not set.");
       return NextResponse.json(
@@ -57,10 +62,10 @@ export async function POST(
     console.log(`[Prepare API] Triggering GitHub Actions workflow for Media: ${id}`);
     
     try {
-      // First update status in database to 'processing' to prevent race conditions
+      // Queue first; the worker atomically claims queued jobs as processing.
       const { error: updateError } = await supabase
         .from("media_library")
-        .update({ processing_status: "processing" })
+        .update({ processing_status: "queued" })
         .eq("id", id);
 
       if (updateError) throw updateError;
@@ -88,7 +93,7 @@ export async function POST(
         const errorText = await githubRes.text();
         console.error(`[Prepare API] GitHub dispatch failed: Status ${githubRes.status} - ${errorText}`);
         
-        // Revert status to none so user can retry
+        // Revert status so the user can retry.
         await supabase
           .from("media_library")
           .update({ processing_status: "none" })
@@ -100,7 +105,7 @@ export async function POST(
         );
       }
 
-      status = "processing";
+      status = "queued";
       console.log(`[Prepare API] Successfully dispatched workflow for Media: ${id}`);
     } catch (err) {
       console.error("[Prepare API] Exception during dispatch:", err);
@@ -117,5 +122,9 @@ export async function POST(
   if (media) {
     media.processing_status = status;
   }
-  return NextResponse.json({ status, media });
+  return NextResponse.json({
+    status,
+    browserPlaybackReady,
+    media,
+  });
 }

@@ -3,6 +3,7 @@ import { execSync, execFileSync } from "child_process";
 import fs from "fs";
 import { google } from "googleapis";
 import { createClient } from "@supabase/supabase-js";
+import { packageBrowserHls } from "./hls-packager";
 
 interface AudioVariant {
   language: string;
@@ -10,7 +11,10 @@ interface AudioVariant {
 }
 
 interface SubtitleTrack {
+  id: string;
   language: string;
+  label: string;
+  forced: boolean;
   content: string;
 }
 
@@ -122,22 +126,45 @@ async function main() {
       }
     } else {
       // --- SINGLE MODE ---
-      // Compare-and-swap claim
+      // The API queues a single item before dispatching this workflow.
       const { data: claimedItem, error: claimError } = await supabase
         .from("media_library")
         .update({ processing_status: "processing" })
         .eq("id", mediaId)
-        .eq("processing_status", "none")
-        .select("id, drive_file_id, title")
+        .eq("processing_status", "queued")
+        .select("*")
         .maybeSingle();
 
       if (claimError || !claimedItem) {
-        console.log(`[Shard ${shardIndex}] Media ID ${mediaId} already processed or currently processing elsewhere. Exiting.`);
+        console.log(`[Shard ${shardIndex}] Media ID ${mediaId} is not queued or was claimed elsewhere. Exiting.`);
         process.exit(0);
       }
 
       console.log(`[Shard ${shardIndex}] Processing single claimed Media: ${claimedItem.title}`);
-      await processSingleMedia(claimedItem.id, claimedItem.drive_file_id, claimedItem.title, supabase, drive, accessToken, googleDriveFolderId);
+      try {
+        if (claimedItem.audio_streams?.browserHls) {
+          await supabase
+            .from("media_library")
+            .update({ processing_status: "ready" })
+            .eq("id", claimedItem.id);
+        } else if (claimedItem.processed_drive_file_id) {
+          await prepareHlsFromExistingVariants(
+            claimedItem,
+            supabase,
+            drive,
+            accessToken,
+            googleDriveFolderId,
+          );
+        } else {
+          await processSingleMedia(claimedItem.id, claimedItem.drive_file_id, claimedItem.title, supabase, drive, accessToken, googleDriveFolderId);
+        }
+      } catch (error) {
+        await supabase
+          .from("media_library")
+          .update({ processing_status: "failed" })
+          .eq("id", claimedItem.id);
+        throw error;
+      }
     }
     
     console.log(`[Shard ${shardIndex}] Worker execution completed.`);
@@ -145,6 +172,88 @@ async function main() {
     console.error(`[Shard ${shardIndex}] Fatal execution error:`, err);
     process.exit(1);
   }
+}
+
+function cleanLanguage(value: unknown, fallback: string) {
+  const language = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return language || fallback;
+}
+
+function audioLabel(track: { language: string; title?: string; channels?: number }) {
+  const base = track.title?.trim() || track.language.toUpperCase();
+  const layout = track.channels && track.channels > 2 ? `${track.channels} channels` : "Stereo";
+  return `${base} · ${layout}`;
+}
+
+async function prepareHlsFromExistingVariants(
+  media: any,
+  supabase: any,
+  drive: any,
+  accessToken: string,
+  googleDriveFolderId: string,
+) {
+  const defaultId = media.processed_drive_file_id;
+  const variants = (Array.isArray(media.audio_variants) ? media.audio_variants : [])
+    .filter((variant: AudioVariant) => variant?.driveFileId);
+  const uniqueVariants: AudioVariant[] = [
+    {
+      language: variants[0]?.language || "default",
+      driveFileId: defaultId,
+    },
+    ...variants,
+  ].filter(
+    (variant, index, items) =>
+      items.findIndex((item) => item.driveFileId === variant.driveFileId) === index,
+  );
+  const streams = Array.isArray(media.audio_streams)
+    ? media.audio_streams
+    : media.audio_streams?.tracks || [];
+  const authHeaders = `Authorization: Bearer ${accessToken}\r\n`;
+  const sourceUrl = (fileId: string) =>
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+
+  const hlsManifest = await packageBrowserHls({
+    mediaId: media.id,
+    title: media.title,
+    video: {
+      input: sourceUrl(defaultId),
+      headers: authHeaders,
+      streamIndex: 0,
+      width: null,
+      height: null,
+      bandwidth: 8_000_000,
+    },
+    audio: uniqueVariants.map((variant, index) => {
+      const stream = streams[index] || {};
+      const language = cleanLanguage(variant.language || stream.language, `track-${index + 1}`);
+      const channels = Number(stream.channels) || 2;
+      return {
+        input: sourceUrl(variant.driveFileId),
+        headers: authHeaders,
+        streamIndex: 0,
+        index,
+        language,
+        label: audioLabel({ language, title: stream.title, channels }),
+        channels,
+        default: index === 0,
+      };
+    }),
+    drive,
+    parentFolderId: googleDriveFolderId,
+  });
+
+  const { error } = await supabase
+    .from("media_library")
+    .update({
+      audio_streams: {
+        version: 2,
+        tracks: streams,
+        browserHls: hlsManifest,
+      },
+      processing_status: "ready",
+    })
+    .eq("id", media.id);
+  if (error) throw error;
 }
 
 async function processSingleMedia(
@@ -187,9 +296,11 @@ async function processSingleMedia(
     if (s.codec_type !== "audio") continue;
     audioTracks.push({
       index: audioIdx++,
-      language: s.tags?.language || "unknown",
+      language: cleanLanguage(s.tags?.language, `track-${audioIdx}`),
+      title: s.tags?.title || undefined,
       codec: s.codec_name,
       channels: s.channels,
+      default: s.disposition?.default === 1,
     });
   }
   console.log(`[Shard ${shardIndex}] Found ${audioTracks.length} audio track(s).`);
@@ -198,16 +309,26 @@ async function processSingleMedia(
   const subtitleTracks: SubtitleTrack[] = [];
   const textSubtitleCodecs = new Set(["subrip", "srt", "webvtt", "ass", "ssa", "mov_text", "text", "microdvd"]);
   
-  const subtitleTracksToExtract: Array<{ ffmpegIndex: number; language: string }> = [];
+  const subtitleTracksToExtract: Array<{
+    ffmpegIndex: number;
+    id: string;
+    language: string;
+    label: string;
+    forced: boolean;
+  }> = [];
   let subIdx = 0;
   for (const s of streams) {
     if (s.codec_type !== "subtitle") continue;
     const currentIdx = subIdx++;
     if (!textSubtitleCodecs.has(s.codec_name)) continue;
     
+    const language = cleanLanguage(s.tags?.language, `track-${currentIdx + 1}`);
     subtitleTracksToExtract.push({
       ffmpegIndex: currentIdx,
-      language: s.tags?.language || `track-${currentIdx}`,
+      id: `${language}-${currentIdx}`,
+      language,
+      label: s.tags?.title || language.toUpperCase(),
+      forced: s.disposition?.forced === 1,
     });
   }
 
@@ -228,7 +349,10 @@ async function processSingleMedia(
         if (fs.existsSync(filename)) {
           const content = fs.readFileSync(filename, "utf8");
           subtitleTracks.push({
+            id: track.id,
             language: track.language,
+            label: track.label,
+            forced: track.forced,
             content,
           });
           fs.unlinkSync(filename);
@@ -255,6 +379,32 @@ async function processSingleMedia(
       { language: audioTracks[0]?.language || "default", driveFileId: sourceFileId },
     ];
     
+    const authHeaders = `Authorization: Bearer ${accessToken}\r\n`;
+    const hlsManifest = await packageBrowserHls({
+      mediaId,
+      title,
+      video: {
+        input: sourceUrl,
+        headers: authHeaders,
+        streamIndex: 0,
+        width: videoStream.width || null,
+        height: videoStream.height || null,
+        bandwidth: Number(parsedProbe.format?.bit_rate) || 8_000_000,
+      },
+      audio: audioTracks.map((track, index) => ({
+        input: sourceUrl,
+        headers: authHeaders,
+        streamIndex: track.index,
+        index,
+        language: track.language,
+        label: audioLabel(track),
+        channels: track.channels || 2,
+        default: index === 0,
+      })),
+      drive,
+      parentFolderId: googleDriveFolderId,
+    });
+
     const { error: updateError } = await supabase
       .from("media_library")
       .update({
@@ -264,6 +414,11 @@ async function processSingleMedia(
         mime_type: "video/mp4",
         audio_variants: audioVariants as any,
         subtitle_tracks: subtitleTracks as any,
+        audio_streams: {
+          version: 2,
+          tracks: audioTracks,
+          browserHls: hlsManifest,
+        } as any,
       })
       .eq("id", mediaId);
 
@@ -293,16 +448,21 @@ async function processSingleMedia(
   const videoCodecStr = isCompatibleVideo && !isHDR
     ? "-c:v copy"
     : `-c:v libx264 -preset veryfast -crf 22 -vf "${vfFilters}"`;
+  const aacOptions = (track: any) => {
+    const channels = Math.max(1, Math.min(Number(track?.channels) || 2, 6));
+    return `-c:a aac -ac ${channels} -b:a ${channels > 2 ? "384k" : "192k"}`;
+  };
+  const defaultAudioOptions = aacOptions(audioTracks[0]);
 
   // Build audio mapping args dynamically for single-pass transcode
   let extraAudioArgs = "";
   if (shouldStripDovi) {
     for (let i = 1; i < audioTracks.length; i++) {
-      extraAudioArgs += ` -map 1:a:${i} -c:a aac -b:a 192k audio_${i}.aac`;
+      extraAudioArgs += ` -map 1:a:${i} ${aacOptions(audioTracks[i])} audio_${i}.aac`;
     }
   } else {
     for (let i = 1; i < audioTracks.length; i++) {
-      extraAudioArgs += ` -map 0:a:${i} -c:a aac -b:a 192k audio_${i}.aac`;
+      extraAudioArgs += ` -map 0:a:${i} ${aacOptions(audioTracks[i])} audio_${i}.aac`;
     }
   }
 
@@ -312,13 +472,13 @@ async function processSingleMedia(
       `ffmpeg -y -i pipe:0 -an -c:v copy -bsf:v hevc_mp4toannexb -f hevc pipe:1 | ` +
       `dovi_tool remove - -o - | ` +
       `ffmpeg -y -i pipe:0 -headers "Authorization: Bearer ${accessToken}\r\n" -i "${sourceUrl}" ` +
-      `-map 0:v -map 1:a:0 ${videoCodecStr} -c:a aac -b:a 192k -movflags +faststart ${outputFilename}${extraAudioArgs}`;
+      `-map 0:v -map 1:a:0 ${videoCodecStr} ${defaultAudioOptions} -movflags +faststart ${outputFilename}${extraAudioArgs}`;
     
     execSync(pipeCommand, { stdio: "inherit" });
   } else {
     console.log(`[Shard ${shardIndex}] Running transcode pipeline with ${videoCodecStr}...`);
     const transcodeCommand = `ffmpeg -y -headers "Authorization: Bearer ${accessToken}\r\n" -i "${sourceUrl}" ` +
-      `-map 0:v:0 -map 0:a:0 ${videoCodecStr} -c:a aac -b:a 192k -movflags +faststart ${outputFilename}${extraAudioArgs}`;
+      `-map 0:v:0 -map 0:a:0 ${videoCodecStr} ${defaultAudioOptions} -movflags +faststart ${outputFilename}${extraAudioArgs}`;
     
     execSync(transcodeCommand, { stdio: "inherit" });
   }
@@ -403,6 +563,42 @@ async function processSingleMedia(
     console.timeEnd(`[Shard ${shardIndex}] Secondary Audio Mux Phase`);
   }
 
+  const authHeaders = `Authorization: Bearer ${accessToken}\r\n`;
+  const browserSourceUrl = (fileId: string) =>
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+  const hlsManifest = await packageBrowserHls({
+    mediaId,
+    title,
+    video: {
+      input: browserSourceUrl(newDefaultFileId),
+      headers: authHeaders,
+      streamIndex: 0,
+      width: isCompatibleVideo ? videoStream.width || null : 1920,
+      height: isCompatibleVideo ? videoStream.height || null : null,
+      bandwidth: 8_000_000,
+    },
+    audio: audioVariants.map((variant, index) => {
+      const track = audioTracks[index] || {};
+      const language = cleanLanguage(variant.language || track.language, `track-${index + 1}`);
+      return {
+        input: browserSourceUrl(variant.driveFileId),
+        headers: authHeaders,
+        streamIndex: 0,
+        index,
+        language,
+        label: audioLabel({
+          language,
+          title: track.title,
+          channels: track.channels,
+        }),
+        channels: track.channels || 2,
+        default: index === 0,
+      };
+    }),
+    drive,
+    parentFolderId: googleDriveFolderId,
+  });
+
   // Clean up transcode output
   fs.unlinkSync(outputFilename);
 
@@ -418,6 +614,11 @@ async function processSingleMedia(
       mime_type: "video/mp4",
       audio_variants: audioVariants as any,
       subtitle_tracks: subtitleTracks as any,
+      audio_streams: {
+        version: 2,
+        tracks: audioTracks,
+        browserHls: hlsManifest,
+      } as any,
     })
     .eq("id", mediaId);
 

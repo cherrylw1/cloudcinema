@@ -18,8 +18,42 @@ export interface AudioVariant {
 }
 
 export interface SubtitleTrack {
+  id?: string;
   language: string;
+  label?: string;
+  forced?: boolean;
   content: string; // Raw WebVTT text content
+}
+
+export interface HlsRendition {
+  driveFileId: string;
+  fileSize: number;
+  playlist: string;
+}
+
+export interface HlsAudioRendition extends HlsRendition {
+  index: number;
+  language: string;
+  label: string;
+  channels: number;
+  default: boolean;
+}
+
+export interface HlsManifest {
+  version: 1;
+  video: HlsRendition & {
+    codec: string;
+    width: number | null;
+    height: number | null;
+    bandwidth: number;
+  };
+  audio: HlsAudioRendition[];
+}
+
+export interface StreamMetadata {
+  version: 2;
+  tracks: AudioStream[];
+  browserHls: HlsManifest;
 }
 
 export interface Media {
@@ -44,6 +78,7 @@ export interface Media {
   processingStatus: string;
   audioVariants?: AudioVariant[] | null;
   subtitleTracks?: SubtitleTrack[] | null;
+  hlsManifest?: HlsManifest | null;
   processedDriveFileId?: string | null;
   folderPath?: string;
   isGroup?: boolean;
