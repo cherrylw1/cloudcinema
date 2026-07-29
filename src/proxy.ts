@@ -47,6 +47,8 @@ export async function proxy(request: NextRequest) {
   const isSubtitlesRoute = pathname.startsWith("/api/subtitles");
   const isVersionRoute = pathname === "/api/version";
   const isLoginRoute = pathname === "/login";
+  const isMacLoginRoute =
+    isLoginRoute && nextUrl.searchParams.get("platform") === "mac";
   const isPendingRoute = pathname === "/pending-approval";
 
   if (isAuthRoute || isStreamRoute || isSubtitlesRoute || isVersionRoute) {
@@ -87,7 +89,7 @@ export async function proxy(request: NextRequest) {
     }
   } else {
     // Redirect approved users away from auth gates back to dashboard
-    if (isLoginRoute || isPendingRoute) {
+    if ((isLoginRoute && !isMacLoginRoute) || isPendingRoute) {
       const redirectUrl = nextUrl.clone();
       redirectUrl.pathname = "/";
       return NextResponse.redirect(redirectUrl);
