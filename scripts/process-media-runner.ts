@@ -302,6 +302,7 @@ async function setBrowserPreparationState(
           state,
           requestedAt: previous.requestedAt || new Date().toISOString(),
           attempt: previous.attempt || 1,
+          delivery: "queue",
         },
       },
     })
