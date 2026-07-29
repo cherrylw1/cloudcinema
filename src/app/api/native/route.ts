@@ -49,7 +49,13 @@ function normalizeMedia(item: Record<string, unknown>, userId: string) {
 export async function GET(request: NextRequest) {
   const auth = await approvedUser(request);
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized native session." },
+      {
+        status: 401,
+        headers: { "X-CloudCinema-Handler": "native" },
+      },
+    );
   }
 
   const { searchParams } = request.nextUrl;
@@ -112,7 +118,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await approvedUser(request);
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized access." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized native session." },
+      {
+        status: 401,
+        headers: { "X-CloudCinema-Handler": "native" },
+      },
+    );
   }
 
   const body = await request.json().catch(() => null) as {

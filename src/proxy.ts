@@ -45,13 +45,20 @@ export async function proxy(request: NextRequest) {
   const isAuthRoute = pathname.startsWith("/api/auth");
   const isStreamRoute = pathname.startsWith("/api/stream");
   const isSubtitlesRoute = pathname.startsWith("/api/subtitles");
+  const isNativeRoute = pathname.startsWith("/api/native");
   const isVersionRoute = pathname === "/api/version";
   const isLoginRoute = pathname === "/login";
   const isMacLoginRoute =
     isLoginRoute && nextUrl.searchParams.get("platform") === "mac";
   const isPendingRoute = pathname === "/pending-approval";
 
-  if (isAuthRoute || isStreamRoute || isSubtitlesRoute || isVersionRoute) {
+  if (
+    isAuthRoute ||
+    isStreamRoute ||
+    isSubtitlesRoute ||
+    isNativeRoute ||
+    isVersionRoute
+  ) {
     return response;
   }
 
