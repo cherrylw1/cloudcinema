@@ -105,6 +105,24 @@ actor APIClient {
         return try decoder.decode([MediaItem].self, from: data)
     }
 
+    func series(type: String, limit: Int = 80, offset: Int = 0) async throws -> [MediaItem] {
+        let data = try await data(for: request(query: [
+            .init(name: "resource", value: "series"),
+            .init(name: "type", value: type),
+            .init(name: "limit", value: String(limit)),
+            .init(name: "offset", value: String(offset))
+        ]))
+        return try decoder.decode([MediaItem].self, from: data)
+    }
+
+    func episodes(series: String) async throws -> [MediaItem] {
+        let data = try await data(for: request(query: [
+            .init(name: "resource", value: "episodes"),
+            .init(name: "series", value: series)
+        ]))
+        return try decoder.decode([MediaItem].self, from: data)
+    }
+
     func syncLibrary() async throws -> SyncResult {
         try await action("sync", as: SyncResult.self, timeout: 300)
     }

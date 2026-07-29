@@ -62,7 +62,7 @@ struct FolderBrowserView: View {
                     ) {
                         ForEach(files) { media in
                             MediaCard(media: media, progress: state.progress[media.id]) {
-                                state.selectedMedia = media
+                                Task { await state.openMedia(media) }
                             }
                         }
                     }

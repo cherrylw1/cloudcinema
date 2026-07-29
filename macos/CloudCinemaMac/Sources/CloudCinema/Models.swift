@@ -19,6 +19,7 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     let audioStreams: [AudioStream]?
     let subtitleStreams: [SubtitleStream]?
     let folderPath: String?
+    let episodeCount: Int?
     let createdAt: String
     let streamURL: String
 
@@ -35,6 +36,7 @@ struct MediaItem: Codable, Identifiable, Hashable, Sendable {
         case audioStreams = "audio_streams"
         case subtitleStreams = "subtitle_streams"
         case folderPath = "folder_path"
+        case episodeCount = "episode_count"
         case createdAt = "created_at"
         case streamURL = "stream_url"
     }

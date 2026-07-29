@@ -19,6 +19,8 @@ final class AppState: ObservableObject {
     @Published var watchlist: Set<String> = []
     @Published var selectedSection: SidebarSection = .home
     @Published var selectedMedia: MediaItem?
+    @Published var selectedSeries: MediaItem?
+    @Published var seriesEpisodes: [MediaItem] = []
     @Published var playingMedia: MediaItem?
     @Published var searchText = ""
     @Published var stats: LibraryStats?
@@ -68,6 +70,8 @@ final class AppState: ObservableObject {
     func navigate(to section: SidebarSection) async {
         selectedSection = section
         selectedMedia = nil
+        selectedSeries = nil
+        seriesEpisodes = []
         searchText = ""
         searchResults = []
 
@@ -182,6 +186,31 @@ final class AppState: ObservableObject {
         }
     }
 
+    func openMedia(_ media: MediaItem) async {
+        let isSeries = (media.mediaType == "tv-show" || media.mediaType == "anime")
+            && media.series != nil
+        guard isSeries else {
+            selectedSeries = nil
+            seriesEpisodes = []
+            selectedMedia = media
+            return
+        }
+
+        selectedMedia = nil
+        selectedSeries = media
+        seriesEpisodes = []
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let episodes = try await APIClient.shared.episodes(series: media.series ?? media.title)
+            seriesEpisodes = episodes
+            mergeIntoCatalog(episodes)
+        } catch {
+            selectedSeries = nil
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func openFolder(_ name: String) async {
         let base = folderListing?.path ?? "/"
         let path = base == "/" ? "/\(name)" : "\(base)/\(name)"
@@ -280,6 +309,8 @@ final class AppState: ObservableObject {
         sectionHasMore = [:]
         searchResults = []
         selectedMedia = nil
+        selectedSeries = nil
+        seriesEpisodes = []
         playingMedia = nil
         stats = nil
         folderListing = nil
@@ -341,9 +372,9 @@ final class AppState: ObservableObject {
         case .movies:
             return try await APIClient.shared.catalog(type: "movie", limit: 80, offset: offset)
         case .shows:
-            return try await APIClient.shared.catalog(type: "tv-show", limit: 80, offset: offset)
+            return try await APIClient.shared.series(type: "tv-show", limit: 80, offset: offset)
         case .anime:
-            return try await APIClient.shared.catalog(type: "anime", limit: 80, offset: offset)
+            return try await APIClient.shared.series(type: "anime", limit: 80, offset: offset)
         case .watchlist:
             return try await APIClient.shared.watchlistMedia(limit: 80, offset: offset)
         case .folders, .settings:

@@ -123,7 +123,20 @@ struct ContentView: View {
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 260)
         } detail: {
-            if let selected = state.selectedMedia {
+            if let series = state.selectedSeries {
+                SeriesDetailView(
+                    series: series,
+                    episodes: state.seriesEpisodes,
+                    progress: state.progress,
+                    isWatchlisted: state.watchlist.contains(series.id),
+                    play: { state.playingMedia = $0 },
+                    toggleWatchlist: { Task { await state.toggleWatchlist(series) } },
+                    close: {
+                        state.selectedSeries = nil
+                        state.seriesEpisodes = []
+                    }
+                )
+            } else if let selected = state.selectedMedia {
                 MediaDetailView(
                     media: selected,
                     isWatchlisted: state.watchlist.contains(selected.id),
@@ -196,7 +209,7 @@ struct ContentView: View {
                     ) {
                         ForEach(state.visibleMedia) { media in
                             MediaCard(media: media, progress: state.progress[media.id]) {
-                                state.selectedMedia = media
+                                Task { await state.openMedia(media) }
                             }
                             .task {
                                 await state.loadMoreIfNeeded(current: media)
@@ -225,7 +238,7 @@ struct ContentView: View {
                 LazyHStack(spacing: 16) {
                     ForEach(items) { media in
                         MediaCard(media: media, progress: state.progress[media.id]) {
-                            state.selectedMedia = media
+                            Task { await state.openMedia(media) }
                         }
                         .frame(width: 150)
                     }

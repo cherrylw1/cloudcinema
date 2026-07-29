@@ -50,6 +50,10 @@ function normalizeMedia(item: Record<string, unknown>, userId: string) {
   };
 }
 
+function seriesKey(item: Record<string, unknown>) {
+  return String(item.series || item.title || "Untitled");
+}
+
 function cleanFolderPath(value: string | null) {
   let path = (value || "/").trim();
   if (!path.startsWith("/")) path = `/${path}`;
@@ -188,6 +192,67 @@ export async function GET(request: NextRequest) {
       .from("media_library")
       .select("*")
       .in("id", page);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json((data || []).map((item) => normalizeMedia(item, auth.user.id)));
+  }
+
+  if (resource === "series") {
+    if (!type || !["tv-show", "anime"].includes(type)) {
+      return NextResponse.json({ error: "Missing series type." }, { status: 400 });
+    }
+    const episodes: Record<string, unknown>[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await auth.admin
+        .from("media_library")
+        .select("*")
+        .eq("media_type", type)
+        .order("series", { ascending: true })
+        .order("season", { ascending: true })
+        .order("episode", { ascending: true })
+        .range(from, from + 999);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      episodes.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+
+    const grouped = new Map<string, {
+      representative: Record<string, unknown>;
+      count: number;
+    }>();
+    for (const episode of episodes) {
+      const key = seriesKey(episode);
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.count++;
+        if (!existing.representative.poster_url && episode.poster_url) {
+          existing.representative = episode;
+        }
+      } else {
+        grouped.set(key, { representative: episode, count: 1 });
+      }
+    }
+    const page = Array.from(grouped.entries())
+      .sort(([left], [right]) => left.localeCompare(right))
+      .slice(offset, offset + limit)
+      .map(([, group]) => ({
+        ...normalizeMedia(group.representative, auth.user.id),
+        episode_count: group.count,
+      }));
+    return NextResponse.json(page);
+  }
+
+  if (resource === "episodes") {
+    const series = searchParams.get("series")?.trim();
+    if (!series) {
+      return NextResponse.json({ error: "Missing series name." }, { status: 400 });
+    }
+    const { data, error } = await auth.admin
+      .from("media_library")
+      .select("*")
+      .or(`series.eq."${series.replaceAll("\"", "")}",title.eq."${series.replaceAll("\"", "")}"`)
+      .order("season", { ascending: true })
+      .order("episode", { ascending: true })
+      .limit(500);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json((data || []).map((item) => normalizeMedia(item, auth.user.id)));
   }
