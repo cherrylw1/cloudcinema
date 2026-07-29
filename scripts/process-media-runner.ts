@@ -129,17 +129,17 @@ async function main() {
       }
     } else {
       // --- SINGLE MODE ---
-      // The API queues a single item before dispatching this workflow.
+      // An explicit trusted workflow request also recovers legacy/stale states.
+      // Per-media workflow concurrency prevents two single runs racing.
       const { data: claimedItem, error: claimError } = await supabase
         .from("media_library")
         .update({ processing_status: "processing" })
         .eq("id", mediaId)
-        .eq("processing_status", "queued")
         .select("*")
         .maybeSingle();
 
       if (claimError || !claimedItem) {
-        console.log(`[Shard ${shardIndex}] Media ID ${mediaId} is not queued or was claimed elsewhere. Exiting.`);
+        console.log(`[Shard ${shardIndex}] Media ID ${mediaId} was not found. Exiting.`);
         process.exit(0);
       }
 
