@@ -142,6 +142,7 @@ async function main() {
 
       console.log(`[Shard ${shardIndex}] Processing single claimed Media: ${claimedItem.title}`);
       try {
+        await setBrowserPreparationState(supabase, claimedItem, "processing");
         if (claimedItem.audio_streams?.browserHls) {
           await supabase
             .from("media_library")
@@ -159,10 +160,7 @@ async function main() {
           await processSingleMedia(claimedItem.id, claimedItem.drive_file_id, claimedItem.title, supabase, drive, accessToken, googleDriveFolderId);
         }
       } catch (error) {
-        await supabase
-          .from("media_library")
-          .update({ processing_status: "failed" })
-          .eq("id", claimedItem.id);
+        await setBrowserPreparationState(supabase, claimedItem, "failed");
         throw error;
       }
     }
@@ -254,6 +252,33 @@ async function prepareHlsFromExistingVariants(
     })
     .eq("id", media.id);
   if (error) throw error;
+}
+
+async function setBrowserPreparationState(
+  supabase: any,
+  media: any,
+  state: "processing" | "failed",
+) {
+  const existing = Array.isArray(media.audio_streams)
+    ? { version: 2, tracks: media.audio_streams }
+    : media.audio_streams || { version: 2, tracks: [] };
+  const previous = existing.browserPreparation || {};
+
+  await supabase
+    .from("media_library")
+    .update({
+      processing_status: state,
+      audio_streams: {
+        ...existing,
+        browserPreparation: {
+          ...previous,
+          state,
+          requestedAt: previous.requestedAt || new Date().toISOString(),
+          attempt: previous.attempt || 1,
+        },
+      },
+    })
+    .eq("id", media.id);
 }
 
 async function processSingleMedia(

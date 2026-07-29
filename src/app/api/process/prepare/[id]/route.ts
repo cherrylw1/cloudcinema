@@ -4,6 +4,12 @@ import { env } from "@/config/env";
 
 export const dynamic = "force-dynamic";
 
+interface BrowserPreparation {
+  state: "queued" | "processing" | "failed";
+  requestedAt: string;
+  attempt: number;
+}
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -43,14 +49,25 @@ export async function POST(
   }
 
   let status = media.processing_status || "none";
-  const streamMetadata = media.audio_streams as {
+  const existingStreams = media.audio_streams;
+  const streamMetadata = (Array.isArray(existingStreams)
+    ? { version: 2, tracks: existingStreams }
+    : existingStreams || { version: 2, tracks: [] }) as {
     browserHls?: unknown;
-  } | null;
+    browserPreparation?: BrowserPreparation;
+    tracks?: unknown[];
+    version?: number;
+  };
   const browserPlaybackReady = Boolean(streamMetadata?.browserHls);
+  const preparation = streamMetadata.browserPreparation;
+  const hasActiveBrowserJob =
+    preparation?.state === "queued" || preparation?.state === "processing";
+  const attemptsExhausted =
+    preparation?.state === "failed" && preparation.attempt >= 2;
 
   // 4. Queue browser preparation when HLS is missing. Existing processed MP4s
   // are reused by the runner and remain untouched for external players.
-  if (!browserPlaybackReady && !["queued", "processing"].includes(status)) {
+  if (!browserPlaybackReady && !hasActiveBrowserJob && !attemptsExhausted) {
     if (!env.githubPat) {
       console.error("[Prepare API] Trigger failed: GITHUB_PAT env variable is not set.");
       return NextResponse.json(
@@ -63,9 +80,22 @@ export async function POST(
     
     try {
       // Queue first; the worker atomically claims queued jobs as processing.
+      const browserPreparation: BrowserPreparation = {
+        state: "queued",
+        requestedAt: new Date().toISOString(),
+        attempt: (preparation?.attempt || 0) + 1,
+      };
       const { error: updateError } = await supabase
         .from("media_library")
-        .update({ processing_status: "queued" })
+        .update({
+          processing_status: "queued",
+          audio_streams: {
+            ...streamMetadata,
+            version: 2,
+            tracks: streamMetadata.tracks || [],
+            browserPreparation,
+          },
+        })
         .eq("id", id);
 
       if (updateError) throw updateError;
@@ -93,10 +123,21 @@ export async function POST(
         const errorText = await githubRes.text();
         console.error(`[Prepare API] GitHub dispatch failed: Status ${githubRes.status} - ${errorText}`);
         
-        // Revert status so the user can retry.
+        // Preserve the attempt so repeated page polls cannot dispatch forever.
         await supabase
           .from("media_library")
-          .update({ processing_status: "none" })
+          .update({
+            processing_status: "failed",
+            audio_streams: {
+              ...streamMetadata,
+              version: 2,
+              tracks: streamMetadata.tracks || [],
+              browserPreparation: {
+                ...browserPreparation,
+                state: "failed",
+              },
+            },
+          })
           .eq("id", id);
 
         return NextResponse.json(
@@ -109,10 +150,22 @@ export async function POST(
       console.log(`[Prepare API] Successfully dispatched workflow for Media: ${id}`);
     } catch (err) {
       console.error("[Prepare API] Exception during dispatch:", err);
-      // Revert status
+      const failedPreparation: BrowserPreparation = {
+        state: "failed",
+        requestedAt: new Date().toISOString(),
+        attempt: (preparation?.attempt || 0) + 1,
+      };
       await supabase
         .from("media_library")
-        .update({ processing_status: "none" })
+        .update({
+          processing_status: "failed",
+          audio_streams: {
+            ...streamMetadata,
+            version: 2,
+            tracks: streamMetadata.tracks || [],
+            browserPreparation: failedPreparation,
+          },
+        })
         .eq("id", id);
 
       return NextResponse.json({ error: "Internal server error during dispatch." }, { status: 500 });
@@ -123,7 +176,7 @@ export async function POST(
     media.processing_status = status;
   }
   return NextResponse.json({
-    status,
+    status: attemptsExhausted ? "failed" : status,
     browserPlaybackReady,
     media,
   });
