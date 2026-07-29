@@ -14,7 +14,6 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("SwiftUI"),
-                .linkedFramework("Network"),
                 .linkedFramework("Security"),
                 .linkedLibrary("dl")
             ]

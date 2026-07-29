@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import OSLog
 import SwiftUI
@@ -92,6 +93,31 @@ final class AppState: ObservableObject {
         appStateLog.notice("Stored native session; loading library")
         isAuthenticated = true
         await bootstrap()
+    }
+
+    func startAuthentication() {
+        do {
+            try NativeAuthentication.start()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func handleAuthenticationCallback(_ url: URL) async {
+        do {
+            let tokens = try NativeAuthentication.consumeCallback(url)
+            NSApp.activate(ignoringOtherApps: true)
+            await completeAuthentication(
+                accessToken: tokens.accessToken,
+                refreshToken: tokens.refreshToken
+            )
+        } catch {
+            appStateLog.error(
+                "Authentication callback failed: \(error.localizedDescription, privacy: .public)"
+            )
+            NSApp.activate(ignoringOtherApps: true)
+            errorMessage = error.localizedDescription
+        }
     }
 
     func signOut() {

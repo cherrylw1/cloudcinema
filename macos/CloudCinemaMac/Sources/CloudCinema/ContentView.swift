@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var state: AppState
-    @StateObject private var authentication = AuthenticationManager()
 
     var body: some View {
         Group {
@@ -56,19 +55,7 @@ struct ContentView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
                 Button("Sign in with Google") {
-                    authentication.signIn { result in
-                        switch result {
-                        case .success(let (access, refresh)):
-                            Task {
-                                await state.completeAuthentication(
-                                    accessToken: access,
-                                    refreshToken: refresh
-                                )
-                            }
-                        case .failure(let error):
-                            state.errorMessage = error.localizedDescription
-                        }
-                    }
+                    state.startAuthentication()
                 }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)

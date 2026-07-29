@@ -20,7 +20,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Framewor
 cd "$PROJECT"
 CLANG_MODULE_CACHE_PATH="/tmp/cloudcinema-module-cache" \
   SDKROOT="$SDK" \
-  swift build -c release --scratch-path "$SWIFT_SCRATCH"
+  swift build --disable-sandbox -c release --scratch-path "$SWIFT_SCRATCH"
 cp "$SWIFT_SCRATCH/arm64-apple-macosx/release/CloudCinema" "$APP/Contents/MacOS/CloudCinema"
 cp "$ROOT/public/app_icon.png" "$APP/Contents/Resources/AppIcon.png"
 cp "$IINA_FRAMEWORKS"/*.dylib "$APP/Contents/Frameworks/"
@@ -30,22 +30,29 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>CloudCinema</string>
-<key>CFBundleIdentifier</key><string>com.cloudcinema.mac</string>
+<key>CFBundleIdentifier</key><string>com.cloudcinema.mac.v2</string>
+<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>CloudCinema</string>
 <key>CFBundleDisplayName</key><string>CloudCinema</string>
-<key>CFBundleVersion</key><string>2</string>
-<key>CFBundleShortVersionString</key><string>1.1</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleVersion</key><string>3</string>
+<key>CFBundleShortVersionString</key><string>1.2</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>CFBundleIconFile</key><string>AppIcon.png</string>
+<key>CFBundleURLTypes</key><array><dict>
+<key>CFBundleURLName</key><string>com.cloudcinema.mac.v2.oauth</string>
+<key>CFBundleURLSchemes</key><array><string>cloudcinema-mac-v2</string></array>
+</dict></array>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><false/></dict>
 </dict></plist>
 PLIST
 
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/CloudCinema" 2>/dev/null || true
+xattr -cr "$APP"
 codesign --force --deep --sign - "$APP"
 
-hdiutil create -volname "CloudCinema" -srcfolder "$APP" -ov -format UDZO "$OUTPUT/CloudCinema-macOS-v1.1.dmg"
+hdiutil create -volname "CloudCinema" -srcfolder "$APP" -ov -format UDZO "$OUTPUT/CloudCinema-macOS-v1.2.dmg"
 echo "$APP"
-echo "$OUTPUT/CloudCinema-macOS-v1.1.dmg"
+echo "$OUTPUT/CloudCinema-macOS-v1.2.dmg"

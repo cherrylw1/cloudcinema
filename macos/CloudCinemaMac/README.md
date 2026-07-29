@@ -11,5 +11,6 @@ local ad-hoc signing, and creates both `.app` and `.dmg` artifacts.
 The web application remains a separate target. The only shared addition is the
 authenticated `/api/native` JSON contract.
 
-Google authentication uses a short-lived loopback listener bound to
-`127.0.0.1`; it does not require a custom URL scheme or embedded browser.
+Google authentication uses the registered `cloudcinema-mac-v2` URL scheme. The
+pending nonce is persisted so the callback remains valid if macOS relaunches
+the app while authentication is in progress.

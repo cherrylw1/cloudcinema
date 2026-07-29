@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,9 @@ import { SupabaseAuthRepository } from "@/repositories/auth/supabase-auth-reposi
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const autoStartAttempted = useRef(false);
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -21,7 +22,20 @@ export default function LoginPage() {
       setError(message);
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (
+      params.get("platform") === "mac" &&
+      params.get("autostart") === "1" &&
+      !params.has("error") &&
+      !autoStartAttempted.current
+    ) {
+      autoStartAttempted.current = true;
+      void handleGoogleSignIn();
+    }
+  }, [handleGoogleSignIn]);
 
   return (
     <PageContainer

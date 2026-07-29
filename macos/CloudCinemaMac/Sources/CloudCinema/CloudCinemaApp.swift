@@ -10,6 +10,9 @@ struct CloudCinemaApp: App {
             ContentView()
                 .environmentObject(state)
                 .preferredColorScheme(.dark)
+                .onOpenURL { url in
+                    Task { await state.handleAuthenticationCallback(url) }
+                }
         }
         .defaultSize(width: 1280, height: 800)
         .windowStyle(.hiddenTitleBar)

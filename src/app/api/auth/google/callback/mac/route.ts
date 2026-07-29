@@ -4,29 +4,41 @@ import { createClient } from "@/clients/supabase/server";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export async function GET(request: NextRequest) {
-  const requestUrl = new URL(request.url);
-  const code = requestUrl.searchParams.get("code");
-  const handoff = request.cookies.get("cc_mac_handoff")?.value;
-  const [portValue, nonce] = handoff?.split(":") ?? [];
-  const port = Number(portValue);
+function clearHandoff(response: NextResponse) {
+  response.cookies.set("cc_mac_handoff", "", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/api/auth",
+    maxAge: 0,
+  });
+  return response;
+}
 
-  if (code && nonce && UUID_PATTERN.test(nonce) && port >= 1024 && port <= 65535) {
+export async function GET(request: NextRequest) {
+  const code = request.nextUrl.searchParams.get("code");
+  const nonce = request.cookies.get("cc_mac_handoff")?.value;
+
+  if (nonce && UUID_PATTERN.test(nonce)) {
+    const callbackUrl = new URL("cloudcinema-mac-v2://auth-callback");
+    callbackUrl.searchParams.set("nonce", nonce);
+
     try {
-      const supabase = await createClient();
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      if (!error && data?.session) {
-        const callbackUrl = new URL(`http://127.0.0.1:${port}/callback`);
-        callbackUrl.searchParams.set("nonce", nonce);
-        callbackUrl.searchParams.set("access_token", data.session.access_token);
-        callbackUrl.searchParams.set("refresh_token", data.session.refresh_token);
-        const response = NextResponse.redirect(callbackUrl, 302);
-        response.cookies.delete("cc_mac_handoff");
-        return response;
+      if (code) {
+        const supabase = await createClient();
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error && data?.session) {
+          callbackUrl.searchParams.set("access_token", data.session.access_token);
+          callbackUrl.searchParams.set("refresh_token", data.session.refresh_token);
+          return clearHandoff(NextResponse.redirect(callbackUrl, 302));
+        }
       }
     } catch {
-      // The native client presents a useful error when the callback cannot complete.
+      // Return the failure through the registered app callback below.
     }
+
+    callbackUrl.searchParams.set("error", "oauth_failed");
+    return clearHandoff(NextResponse.redirect(callbackUrl, 302));
   }
 
   return NextResponse.redirect(
