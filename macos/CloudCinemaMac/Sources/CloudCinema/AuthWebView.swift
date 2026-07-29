@@ -1,6 +1,12 @@
 import AppKit
 import Foundation
 import Network
+import OSLog
+
+private let authenticationLog = Logger(
+    subsystem: "com.cloudcinema.mac",
+    category: "Authentication"
+)
 
 @MainActor
 final class AuthenticationManager: ObservableObject {
@@ -9,12 +15,14 @@ final class AuthenticationManager: ObservableObject {
     func signIn(
         onComplete: @escaping @MainActor @Sendable (Result<(String, String), Error>) -> Void
     ) {
+        authenticationLog.notice("Starting loopback Google authentication")
         server?.cancel()
 
         let nonce = UUID().uuidString.lowercased()
         let server = LoopbackAuthServer(nonce: nonce) { [weak self] result in
             Task { @MainActor in
                 self?.server = nil
+                authenticationLog.notice("Authentication handoff completed")
                 onComplete(result)
                 NSApp.activate(ignoringOtherApps: true)
             }
@@ -26,6 +34,9 @@ final class AuthenticationManager: ObservableObject {
                 guard self?.server === server else { return }
                 switch result {
                 case .success(let port):
+                    authenticationLog.notice(
+                        "Loopback listener ready on port \(port, privacy: .public)"
+                    )
                     var components = URLComponents(
                         url: APIClient.site.appending(path: "/api/auth/mac/start"),
                         resolvingAgainstBaseURL: false
@@ -35,12 +46,17 @@ final class AuthenticationManager: ObservableObject {
                         URLQueryItem(name: "nonce", value: nonce),
                     ]
                     guard let url = components.url, NSWorkspace.shared.open(url) else {
+                        authenticationLog.error("Could not open the system browser")
                         self?.server = nil
                         server.cancel()
                         onComplete(.failure(AuthenticationError.couldNotStart))
                         return
                     }
+                    authenticationLog.notice("Opened the system browser")
                 case .failure(let error):
+                    authenticationLog.error(
+                        "Loopback listener failed: \(error.localizedDescription, privacy: .public)"
+                    )
                     self?.server = nil
                     onComplete(.failure(error))
                 }
@@ -117,6 +133,7 @@ final class LoopbackAuthServer: @unchecked Sendable {
             if let chunk { requestData.append(chunk) }
 
             if requestData.range(of: Data("\r\n\r\n".utf8)) != nil {
+                authenticationLog.notice("Received browser callback on loopback listener")
                 self.handle(requestData, connection: connection)
             } else if let error {
                 self.send(
@@ -156,6 +173,7 @@ final class LoopbackAuthServer: @unchecked Sendable {
         let access = values.first { $0.name == "access_token" }?.value
         let refresh = values.first { $0.name == "refresh_token" }?.value
         guard receivedNonce == nonce, let access, !access.isEmpty, let refresh, !refresh.isEmpty else {
+            authenticationLog.error("Rejected browser callback with invalid nonce or missing session")
             send(status: "403 Forbidden", message: "The CloudCinema login response was invalid.", on: connection)
             finish(.failure(AuthenticationError.invalidCallback))
             return
@@ -166,6 +184,7 @@ final class LoopbackAuthServer: @unchecked Sendable {
             message: "Login complete. CloudCinema is ready; you may close this tab.",
             on: connection
         )
+        authenticationLog.notice("Accepted browser callback session")
         finish(.success((access, refresh)))
     }
 

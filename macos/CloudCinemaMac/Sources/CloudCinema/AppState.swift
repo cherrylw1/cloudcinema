@@ -1,5 +1,11 @@
 import Foundation
+import OSLog
 import SwiftUI
+
+private let appStateLog = Logger(
+    subsystem: "com.cloudcinema.mac",
+    category: "AppState"
+)
 
 @MainActor
 final class AppState: ObservableObject {
@@ -33,8 +39,12 @@ final class AppState: ObservableObject {
             self.progress = Dictionary(uniqueKeysWithValues: try await progress.map { ($0.mediaId, $0) })
             self.watchlist = try await watchlist
         } catch APIError.unauthorized {
+            appStateLog.error("Native API rejected the stored session")
             signOut()
         } catch {
+            appStateLog.error(
+                "Bootstrap failed: \(error.localizedDescription, privacy: .public)"
+            )
             errorMessage = error.localizedDescription
         }
     }
@@ -79,6 +89,7 @@ final class AppState: ObservableObject {
     func completeAuthentication(accessToken: String, refreshToken: String) async {
         KeychainStore.save(accessToken, account: "accessToken")
         KeychainStore.save(refreshToken, account: "refreshToken")
+        appStateLog.notice("Stored native session; loading library")
         isAuthenticated = true
         await bootstrap()
     }
