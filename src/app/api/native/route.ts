@@ -64,7 +64,10 @@ export async function GET(request: NextRequest) {
       { error: "Unauthorized native session." },
       {
         status: 401,
-        headers: { "X-CloudCinema-Handler": "native" },
+        headers: {
+          "X-CloudCinema-Handler": "native",
+          "X-CloudCinema-Native-Version": "2",
+        },
       },
     );
   }
@@ -215,7 +218,10 @@ export async function POST(request: NextRequest) {
       { error: "Unauthorized native session." },
       {
         status: 401,
-        headers: { "X-CloudCinema-Handler": "native" },
+        headers: {
+          "X-CloudCinema-Handler": "native",
+          "X-CloudCinema-Native-Version": "2",
+        },
       },
     );
   }
