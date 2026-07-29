@@ -33,16 +33,12 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.cloudcinema.mac</string>
 <key>CFBundleName</key><string>CloudCinema</string>
 <key>CFBundleDisplayName</key><string>CloudCinema</string>
-<key>CFBundleVersion</key><string>1</string>
-<key>CFBundleShortVersionString</key><string>1.0</string>
+<key>CFBundleVersion</key><string>2</string>
+<key>CFBundleShortVersionString</key><string>1.1</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>CFBundleIconFile</key><string>AppIcon.png</string>
-<key>CFBundleURLTypes</key><array><dict>
-<key>CFBundleURLName</key><string>CloudCinema Authentication</string>
-<key>CFBundleURLSchemes</key><array><string>cloudcinema-mac</string></array>
-</dict></array>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><false/></dict>
 </dict></plist>
 PLIST
@@ -50,6 +46,6 @@ PLIST
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/CloudCinema" 2>/dev/null || true
 codesign --force --deep --sign - "$APP"
 
-hdiutil create -volname "CloudCinema" -srcfolder "$APP" -ov -format UDZO "$OUTPUT/CloudCinema-macOS.dmg"
+hdiutil create -volname "CloudCinema" -srcfolder "$APP" -ov -format UDZO "$OUTPUT/CloudCinema-macOS-v1.1.dmg"
 echo "$APP"
-echo "$OUTPUT/CloudCinema-macOS.dmg"
+echo "$OUTPUT/CloudCinema-macOS-v1.1.dmg"

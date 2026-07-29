@@ -1,33 +1,41 @@
-import AppKit
-import AuthenticationServices
 import Foundation
+
+nonisolated(unsafe) private var retainedServer: LoopbackAuthServer?
 
 @main
 struct AuthCallbackHarness {
-    @MainActor
     static func main() async {
-        let manager = AuthenticationManager()
-        let callbackURL = URL(
-            string: "cloudcinema-mac://auth-callback"
-                + "?access_token=test-access&refresh_token=test-refresh"
-        )!
-
-        await withCheckedContinuation { continuation in
-            let completion = makeAuthenticationCompletion(manager: manager) { result in
-                guard let tokens = try? result.get(),
-                      tokens.0 == "test-access",
-                      tokens.1 == "test-refresh"
-                else {
-                    fputs("AUTH_CALLBACK_SELF_TEST_FAILED\n", stderr)
-                    exit(1)
-                }
-                print("AUTH_CALLBACK_SELF_TEST_PASSED")
-                continuation.resume()
+        let nonce = UUID().uuidString.lowercased()
+        let result: Result<(String, String), Error> = await withCheckedContinuation {
+            continuation in
+            let server = LoopbackAuthServer(nonce: nonce) { result in
+                continuation.resume(returning: result)
             }
-
-            DispatchQueue.global().async {
-                completion(callbackURL, nil)
+            retainedServer = server
+            server.start { ready in
+                guard case .success(let port) = ready else { return }
+                Task {
+                    var components = URLComponents(
+                        string: "http://127.0.0.1:\(port)/callback"
+                    )!
+                    components.queryItems = [
+                        URLQueryItem(name: "nonce", value: nonce),
+                        URLQueryItem(name: "access_token", value: "test-access"),
+                        URLQueryItem(name: "refresh_token", value: "test-refresh"),
+                    ]
+                    _ = try? await URLSession.shared.data(from: components.url!)
+                }
             }
         }
+
+        retainedServer = nil
+        guard let tokens = try? result.get(),
+              tokens.0 == "test-access",
+              tokens.1 == "test-refresh"
+        else {
+            fputs("AUTH_LOOPBACK_SELF_TEST_FAILED\n", stderr)
+            exit(1)
+        }
+        print("AUTH_LOOPBACK_SELF_TEST_PASSED")
     }
 }
