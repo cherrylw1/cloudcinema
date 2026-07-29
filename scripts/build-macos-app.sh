@@ -35,8 +35,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleName</key><string>CloudCinema</string>
 <key>CFBundleDisplayName</key><string>CloudCinema</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>3</string>
-<key>CFBundleShortVersionString</key><string>1.2</string>
+<key>CFBundleVersion</key><string>4</string>
+<key>CFBundleShortVersionString</key><string>1.3</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSPrincipalClass</key><string>NSApplication</string>
@@ -53,6 +53,6 @@ install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/Mac
 xattr -cr "$APP"
 codesign --force --deep --sign - "$APP"
 
-hdiutil create -volname "CloudCinema" -srcfolder "$APP" -ov -format UDZO "$OUTPUT/CloudCinema-macOS-v1.2.dmg"
+hdiutil create -volname "CloudCinema" -srcfolder "$APP" -ov -format UDZO "$OUTPUT/CloudCinema-macOS-v1.3.dmg"
 echo "$APP"
-echo "$OUTPUT/CloudCinema-macOS-v1.2.dmg"
+echo "$OUTPUT/CloudCinema-macOS-v1.3.dmg"

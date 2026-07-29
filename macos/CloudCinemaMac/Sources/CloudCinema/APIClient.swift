@@ -15,7 +15,8 @@ actor APIClient {
         path: String = "/api/native",
         query: [URLQueryItem] = [],
         method: String = "GET",
-        body: Data? = nil
+        body: Data? = nil,
+        timeout: TimeInterval = 30
     ) throws -> URLRequest {
         guard let token = accessToken else { throw APIError.unauthorized }
         var components = URLComponents(url: Self.site.appending(path: path), resolvingAgainstBaseURL: false)!
@@ -26,7 +27,7 @@ actor APIClient {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
-        request.timeoutInterval = 30
+        request.timeoutInterval = timeout
         return request
     }
 
@@ -81,6 +82,41 @@ actor APIClient {
         return Set(try decoder.decode([String].self, from: data))
     }
 
+    func stats() async throws -> LibraryStats {
+        let data = try await data(for: request(query: [.init(name: "resource", value: "stats")]))
+        return try decoder.decode(LibraryStats.self, from: data)
+    }
+
+    func folders(path: String) async throws -> FolderListing {
+        let data = try await data(for: request(query: [
+            .init(name: "resource", value: "folders"),
+            .init(name: "path", value: path),
+            .init(name: "limit", value: "200")
+        ]))
+        return try decoder.decode(FolderListing.self, from: data)
+    }
+
+    func watchlistMedia(limit: Int = 80, offset: Int = 0) async throws -> [MediaItem] {
+        let data = try await data(for: request(query: [
+            .init(name: "resource", value: "watchlist-media"),
+            .init(name: "limit", value: String(limit)),
+            .init(name: "offset", value: String(offset))
+        ]))
+        return try decoder.decode([MediaItem].self, from: data)
+    }
+
+    func syncLibrary() async throws -> SyncResult {
+        try await action("sync", as: SyncResult.self, timeout: 300)
+    }
+
+    func syncMetadata() async throws -> MetadataResult {
+        try await action("metadata", as: MetadataResult.self, timeout: 300)
+    }
+
+    func generateEmbeddings() async throws -> EmbeddingResult {
+        try await action("embeddings", as: EmbeddingResult.self, timeout: 300)
+    }
+
     func saveProgress(mediaId: String, position: Double, completed: Bool) async throws {
         let payload: [String: Any] = [
             "action": "progress", "mediaId": mediaId,
@@ -95,6 +131,18 @@ actor APIClient {
             "action": "watchlist", "mediaId": mediaId
         ])
         _ = try await data(for: request(method: "POST", body: body))
+    }
+
+    private func action<T: Decodable>(
+        _ action: String,
+        as type: T.Type,
+        timeout: TimeInterval
+    ) async throws -> T {
+        let body = try JSONSerialization.data(withJSONObject: ["action": action])
+        let response = try await data(
+            for: request(method: "POST", body: body, timeout: timeout)
+        )
+        return try decoder.decode(T.self, from: response)
     }
 
     nonisolated func absoluteStreamURL(for media: MediaItem) -> URL {

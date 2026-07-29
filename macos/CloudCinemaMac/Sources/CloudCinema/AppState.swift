@@ -13,7 +13,6 @@ final class AppState: ObservableObject {
     @Published var isAuthenticated = KeychainStore.read(account: "accessToken") != nil
     @Published var isLoading = false
     @Published var isLoadingMore = false
-    @Published var hasMoreMedia = true
     @Published var profile: UserProfile?
     @Published var catalog: [MediaItem] = []
     @Published var progress: [String: ProgressItem] = [:]
@@ -22,23 +21,39 @@ final class AppState: ObservableObject {
     @Published var selectedMedia: MediaItem?
     @Published var playingMedia: MediaItem?
     @Published var searchText = ""
-    @Published private var searchResults: [MediaItem] = []
+    @Published var stats: LibraryStats?
+    @Published var folderListing: FolderListing?
+    @Published var activeOperation: String?
+    @Published var syncResult: SyncResult?
+    @Published var metadataResult: MetadataResult?
+    @Published var embeddingResult: EmbeddingResult?
     @Published var errorMessage: String?
 
+    @Published private var sectionMedia: [SidebarSection: [MediaItem]] = [:]
+    @Published private var sectionHasMore: [SidebarSection: Bool] = [:]
+    @Published private var searchResults: [MediaItem] = []
+
     func bootstrap() async {
-        guard isAuthenticated else { return }
+        guard isAuthenticated, !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
         do {
             async let profile = APIClient.shared.profile()
-            async let catalog = APIClient.shared.catalog()
+            async let home = APIClient.shared.catalog()
             async let progress = APIClient.shared.progress()
             async let watchlist = APIClient.shared.watchlist()
+            async let stats = APIClient.shared.stats()
+
             self.profile = try await profile
-            self.catalog = try await catalog
-            self.hasMoreMedia = self.catalog.count == 80
-            self.progress = Dictionary(uniqueKeysWithValues: try await progress.map { ($0.mediaId, $0) })
+            let homeItems = try await home
+            self.sectionMedia[.home] = homeItems
+            self.sectionHasMore[.home] = homeItems.count == 80
+            mergeIntoCatalog(homeItems)
+            self.progress = Dictionary(
+                uniqueKeysWithValues: try await progress.map { ($0.mediaId, $0) }
+            )
             self.watchlist = try await watchlist
+            self.stats = try await stats
         } catch APIError.unauthorized {
             appStateLog.error("Native API rejected the stored session")
             signOut()
@@ -50,9 +65,72 @@ final class AppState: ObservableObject {
         }
     }
 
+    func navigate(to section: SidebarSection) async {
+        selectedSection = section
+        selectedMedia = nil
+        searchText = ""
+        searchResults = []
+
+        if section == .folders {
+            await loadFolder(path: folderListing?.path ?? "/")
+        } else if section == .settings {
+            await refreshStats()
+        } else {
+            await loadSection(section)
+        }
+    }
+
+    func refreshCurrentSection() async {
+        guard !isLoading else { return }
+        if selectedSection == .folders {
+            await loadFolder(path: folderListing?.path ?? "/")
+            return
+        }
+        if selectedSection == .settings {
+            await refreshStats()
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            async let refreshedProgress = APIClient.shared.progress()
+            async let refreshedWatchlist = APIClient.shared.watchlist()
+            let items = try await fetchSection(selectedSection, offset: 0)
+            sectionMedia[selectedSection] = items
+            sectionHasMore[selectedSection] = items.count == 80
+            mergeIntoCatalog(items)
+            progress = Dictionary(
+                uniqueKeysWithValues: try await refreshedProgress.map { ($0.mediaId, $0) }
+            )
+            watchlist = try await refreshedWatchlist
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadSection(_ section: SidebarSection, force: Bool = false) async {
+        guard section != .folders, section != .settings else { return }
+        if !force, sectionMedia[section] != nil { return }
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let items = try await fetchSection(section, offset: 0)
+            sectionMedia[section] = items
+            sectionHasMore[section] = items.count == 80
+            mergeIntoCatalog(items)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func loadMoreIfNeeded(current media: MediaItem) async {
+        let section = selectedSection
         guard searchText.isEmpty,
-              hasMoreMedia,
+              section != .folders,
+              section != .settings,
+              sectionHasMore[section] == true,
               !isLoading,
               !isLoadingMore,
               media.id == visibleMedia.last?.id
@@ -61,10 +139,13 @@ final class AppState: ObservableObject {
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {
-            let next = try await APIClient.shared.catalog(limit: 80, offset: catalog.count)
-            let known = Set(catalog.map(\.id))
-            catalog.append(contentsOf: next.filter { !known.contains($0.id) })
-            hasMoreMedia = next.count == 80
+            let currentItems = sectionMedia[section] ?? []
+            let next = try await fetchSection(section, offset: currentItems.count)
+            let known = Set(currentItems.map(\.id))
+            let unique = next.filter { !known.contains($0.id) }
+            sectionMedia[section] = currentItems + unique
+            sectionHasMore[section] = next.count == 80
+            mergeIntoCatalog(unique)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -77,12 +158,81 @@ final class AppState: ObservableObject {
             return
         }
         try? await Task.sleep(for: .milliseconds(250))
-        guard !Task.isCancelled, query == searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !Task.isCancelled,
+              query == searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         else { return }
         do {
             searchResults = try await APIClient.shared.catalog(query: query, limit: 200)
+            mergeIntoCatalog(searchResults)
         } catch {
             guard !Task.isCancelled else { return }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadFolder(path: String) async {
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            folderListing = try await APIClient.shared.folders(path: path)
+            mergeIntoCatalog(folderListing?.files ?? [])
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func openFolder(_ name: String) async {
+        let base = folderListing?.path ?? "/"
+        let path = base == "/" ? "/\(name)" : "\(base)/\(name)"
+        await loadFolder(path: path)
+    }
+
+    func openParentFolder() async {
+        guard let path = folderListing?.path, path != "/" else { return }
+        var segments = path.split(separator: "/").map(String.init)
+        segments.removeLast()
+        await loadFolder(path: segments.isEmpty ? "/" : "/\(segments.joined(separator: "/"))")
+    }
+
+    func runLibrarySync() async {
+        guard activeOperation == nil else { return }
+        activeOperation = "sync"
+        syncResult = nil
+        defer { activeOperation = nil }
+        do {
+            syncResult = try await APIClient.shared.syncLibrary()
+            sectionMedia = [:]
+            sectionHasMore = [:]
+            await bootstrapAfterOperation()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func runMetadataSync() async {
+        guard activeOperation == nil else { return }
+        activeOperation = "metadata"
+        metadataResult = nil
+        defer { activeOperation = nil }
+        do {
+            metadataResult = try await APIClient.shared.syncMetadata()
+            sectionMedia = [:]
+            sectionHasMore = [:]
+            await bootstrapAfterOperation()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func runEmbeddingGeneration() async {
+        guard activeOperation == nil else { return }
+        activeOperation = "embeddings"
+        embeddingResult = nil
+        defer { activeOperation = nil }
+        do {
+            embeddingResult = try await APIClient.shared.generateEmbeddings()
+        } catch {
             errorMessage = error.localizedDescription
         }
     }
@@ -126,20 +276,34 @@ final class AppState: ObservableObject {
         catalog = []
         progress = [:]
         watchlist = []
+        sectionMedia = [:]
+        sectionHasMore = [:]
         searchResults = []
-        hasMoreMedia = true
         selectedMedia = nil
         playingMedia = nil
+        stats = nil
+        folderListing = nil
         isAuthenticated = false
     }
 
     func toggleWatchlist(_ media: MediaItem) async {
         let wasPresent = watchlist.contains(media.id)
-        if wasPresent { watchlist.remove(media.id) } else { watchlist.insert(media.id) }
+        if wasPresent {
+            watchlist.remove(media.id)
+            sectionMedia[.watchlist]?.removeAll { $0.id == media.id }
+        } else {
+            watchlist.insert(media.id)
+            sectionMedia[.watchlist, default: []].insert(media, at: 0)
+        }
         do {
             try await APIClient.shared.toggleWatchlist(mediaId: media.id)
         } catch {
-            if wasPresent { watchlist.insert(media.id) } else { watchlist.remove(media.id) }
+            if wasPresent {
+                watchlist.insert(media.id)
+            } else {
+                watchlist.remove(media.id)
+            }
+            sectionMedia[.watchlist] = nil
             errorMessage = error.localizedDescription
         }
     }
@@ -158,15 +322,7 @@ final class AppState: ObservableObject {
         if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return searchResults
         }
-        let base: [MediaItem]
-        switch selectedSection {
-        case .home, .library: base = catalog
-        case .movies: base = catalog.filter { $0.mediaType == "movie" }
-        case .shows: base = catalog.filter { $0.mediaType == "tv-show" }
-        case .anime: base = catalog.filter { $0.mediaType == "anime" }
-        case .watchlist: base = catalog.filter { watchlist.contains($0.id) }
-        }
-        return base
+        return sectionMedia[selectedSection] ?? []
     }
 
     var continueWatching: [MediaItem] {
@@ -175,6 +331,54 @@ final class AppState: ObservableObject {
             return item.playbackPosition > 30 && !item.completed
         }.sorted {
             (progress[$0.id]?.lastWatched ?? "") > (progress[$1.id]?.lastWatched ?? "")
+        }
+    }
+
+    private func fetchSection(_ section: SidebarSection, offset: Int) async throws -> [MediaItem] {
+        switch section {
+        case .home, .library:
+            return try await APIClient.shared.catalog(limit: 80, offset: offset)
+        case .movies:
+            return try await APIClient.shared.catalog(type: "movie", limit: 80, offset: offset)
+        case .shows:
+            return try await APIClient.shared.catalog(type: "tv-show", limit: 80, offset: offset)
+        case .anime:
+            return try await APIClient.shared.catalog(type: "anime", limit: 80, offset: offset)
+        case .watchlist:
+            return try await APIClient.shared.watchlistMedia(limit: 80, offset: offset)
+        case .folders, .settings:
+            return []
+        }
+    }
+
+    private func mergeIntoCatalog(_ items: [MediaItem]) {
+        guard !items.isEmpty else { return }
+        var indexed = Dictionary(uniqueKeysWithValues: catalog.map { ($0.id, $0) })
+        for item in items {
+            indexed[item.id] = item
+        }
+        catalog = Array(indexed.values)
+    }
+
+    private func refreshStats() async {
+        do {
+            stats = try await APIClient.shared.stats()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func bootstrapAfterOperation() async {
+        do {
+            async let home = APIClient.shared.catalog()
+            async let stats = APIClient.shared.stats()
+            let homeItems = try await home
+            sectionMedia[.home] = homeItems
+            sectionHasMore[.home] = homeItems.count == 80
+            mergeIntoCatalog(homeItems)
+            self.stats = try await stats
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

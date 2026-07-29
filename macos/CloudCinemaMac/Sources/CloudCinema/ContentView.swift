@@ -78,9 +78,24 @@ struct ContentView: View {
                 }
                 .padding(.vertical, 12)
 
-                List(SidebarSection.allCases, selection: $state.selectedSection) { section in
-                    Label(section.rawValue, systemImage: section.symbol)
-                        .tag(section)
+                List {
+                    ForEach(SidebarSection.allCases) { section in
+                        Button {
+                            Task { await state.navigate(to: section) }
+                        } label: {
+                            HStack {
+                                Label(section.rawValue, systemImage: section.symbol)
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(
+                            state.selectedSection == section
+                                ? Color.accentColor.opacity(0.18)
+                                : Color.clear
+                        )
+                    }
                 }
                 .listStyle(.sidebar)
 
@@ -117,6 +132,10 @@ struct ContentView: View {
                     toggleWatchlist: { Task { await state.toggleWatchlist(selected) } },
                     close: { state.selectedMedia = nil }
                 )
+            } else if state.selectedSection == .settings {
+                SettingsView()
+            } else if state.selectedSection == .folders {
+                FolderBrowserView()
             } else {
                 catalog
             }
@@ -127,10 +146,11 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItem {
-                Button { Task { await state.bootstrap() } } label: {
+                Button { Task { await state.refreshCurrentSection() } } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .help("Refresh Library")
+                .disabled(state.isLoading || state.activeOperation != nil)
+                .help("Refresh Current View")
             }
         }
     }
@@ -150,19 +170,37 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if state.isLoading { ProgressView().controlSize(.small) }
+                    if state.isLoading {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button {
+                            Task { await state.refreshCurrentSection() }
+                        } label: {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.borderless)
+                    }
                 }
 
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 145, maximum: 190), spacing: 18)],
-                    spacing: 24
-                ) {
-                    ForEach(state.visibleMedia) { media in
-                        MediaCard(media: media, progress: state.progress[media.id]) {
-                            state.selectedMedia = media
-                        }
-                        .task {
-                            await state.loadMoreIfNeeded(current: media)
+                if state.visibleMedia.isEmpty, !state.isLoading {
+                    ContentUnavailableView(
+                        "No titles found",
+                        systemImage: "film.stack",
+                        description: Text("Refresh this view after synchronizing your library.")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 300)
+                } else {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 145, maximum: 190), spacing: 18)],
+                        spacing: 24
+                    ) {
+                        ForEach(state.visibleMedia) { media in
+                            MediaCard(media: media, progress: state.progress[media.id]) {
+                                state.selectedMedia = media
+                            }
+                            .task {
+                                await state.loadMoreIfNeeded(current: media)
+                            }
                         }
                     }
                 }

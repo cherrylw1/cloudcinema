@@ -9,6 +9,7 @@ interface SyncSummary {
   videos: number;     // Total video files processed
   added: number;      // New videos added to catalog
   updated: number;    // Existing videos updated
+  removed: number;    // Catalog records no longer present in Drive
   skipped: number;    // Non-video files skipped
 }
 
@@ -64,9 +65,21 @@ export class DriveSyncService {
     }
   }
 
-  async sync(options?: { full?: boolean; modifiedDays?: number }): Promise<SyncSummary> {
+  async sync(options?: {
+    full?: boolean;
+    modifiedDays?: number;
+    pruneMissing?: boolean;
+  }): Promise<SyncSummary> {
     const rootFolderId = env.googleDriveFolderId || "root";
-    const summary: SyncSummary = { scanned: 0, folders: 0, videos: 0, added: 0, updated: 0, skipped: 0 };
+    const summary: SyncSummary = {
+      scanned: 0,
+      folders: 0,
+      videos: 0,
+      added: 0,
+      updated: 0,
+      removed: 0,
+      skipped: 0,
+    };
     const adminClient = createAdminClient();
 
     console.log(`[Sync] Resolving start folder ID for: ${rootFolderId}`);
@@ -202,6 +215,34 @@ export class DriveSyncService {
           }
         }
       }
+    }
+
+    if (isFullSync && options?.pruneMissing) {
+      const currentDriveIds = new Set(
+        qualifyingVideos.map((video) => video.id).filter((id): id is string => Boolean(id)),
+      );
+      const staleIds: string[] = [];
+
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await adminClient
+          .from("media_library")
+          .select("id,drive_file_id")
+          .range(from, from + 999);
+        if (error) throw error;
+        for (const row of data || []) {
+          if (!currentDriveIds.has(row.drive_file_id)) staleIds.push(row.id);
+        }
+        if (!data || data.length < 1000) break;
+      }
+
+      for (let index = 0; index < staleIds.length; index += 100) {
+        const { error } = await adminClient
+          .from("media_library")
+          .delete()
+          .in("id", staleIds.slice(index, index + 100));
+        if (error) throw error;
+      }
+      summary.removed = staleIds.length;
     }
 
     if (qualifyingVideos.length === 0) {

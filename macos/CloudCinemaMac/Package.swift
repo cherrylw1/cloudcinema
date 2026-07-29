@@ -8,8 +8,19 @@ let package = Package(
         .executable(name: "CloudCinema", targets: ["CloudCinema"])
     ],
     targets: [
+        .target(
+            name: "CMPV",
+            path: "Sources/CMPV",
+            publicHeadersPath: "include",
+            linkerSettings: [
+                .linkedFramework("AppKit"),
+                .linkedFramework("OpenGL"),
+                .linkedLibrary("dl")
+            ]
+        ),
         .executableTarget(
             name: "CloudCinema",
+            dependencies: ["CMPV"],
             path: "Sources/CloudCinema",
             linkerSettings: [
                 .linkedFramework("AppKit"),

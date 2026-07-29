@@ -82,23 +82,66 @@ struct ProgressItem: Codable, Sendable {
     }
 }
 
+struct LibraryStats: Codable, Sendable {
+    let total: Int
+    let movies: Int
+    let shows: Int
+    let anime: Int
+    let dv5: Int
+    let dv78: Int
+}
+
+struct FolderListing: Codable, Sendable {
+    let path: String
+    let folders: [String]
+    let files: [MediaItem]
+}
+
+struct SyncResult: Codable, Sendable {
+    let scanned: Int
+    let folders: Int
+    let videos: Int
+    let added: Int
+    let updated: Int
+    let removed: Int
+    let skipped: Int
+}
+
+struct MetadataResult: Codable, Sendable {
+    let processed: Int
+    let matched: Int
+    let unmatched: Int
+    let reclassifiedAnime: Int
+    let remaining: Int?
+}
+
+struct EmbeddingResult: Codable, Sendable {
+    let processed: Int
+    let remaining: Int
+    let message: String
+}
+
 enum SidebarSection: String, CaseIterable, Identifiable {
     case home = "Home"
     case library = "Library"
+    case folders = "Folders"
     case movies = "Movies"
     case shows = "TV Shows"
     case anime = "Anime"
     case watchlist = "Watchlist"
+    case settings = "Settings"
 
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .home: "house"
         case .library: "rectangle.stack"
+        case .folders: "folder"
         case .movies: "film"
         case .shows: "tv"
         case .anime: "sparkles.tv"
         case .watchlist: "bookmark"
+        case .settings: "gearshape"
         }
     }
 }

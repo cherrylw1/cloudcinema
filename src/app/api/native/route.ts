@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/clients/supabase/admin";
 import { generateStreamToken } from "@/lib/token";
+import { DriveSyncService } from "@/server/services/drive-sync-service";
+import { EmbeddingService } from "@/server/services/embedding-service";
+import { MetadataSyncService } from "@/server/services/metadata-sync-service";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 async function approvedUser(request: NextRequest) {
   const authorization = request.headers.get("authorization") || "";
@@ -44,6 +48,13 @@ function normalizeMedia(item: Record<string, unknown>, userId: string) {
       : [],
     stream_url: streamPath(String(item.id), userId),
   };
+}
+
+function cleanFolderPath(value: string | null) {
+  let path = (value || "/").trim();
+  if (!path.startsWith("/")) path = `/${path}`;
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  return path;
 }
 
 export async function GET(request: NextRequest) {
@@ -96,6 +107,88 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 80, 1), 200);
   const offset = Math.max(Number(searchParams.get("offset")) || 0, 0);
 
+  if (resource === "stats") {
+    const [all, movies, shows, anime, dv5, dv78] = await Promise.all([
+      auth.admin.from("media_library").select("id", { count: "exact", head: true }),
+      auth.admin.from("media_library").select("id", { count: "exact", head: true }).eq("media_type", "movie"),
+      auth.admin.from("media_library").select("id", { count: "exact", head: true }).eq("media_type", "tv-show"),
+      auth.admin.from("media_library").select("id", { count: "exact", head: true }).eq("media_type", "anime"),
+      auth.admin.from("media_library").select("id", { count: "exact", head: true }).eq("dv_profile", 5),
+      auth.admin.from("media_library").select("id", { count: "exact", head: true }).in("dv_profile", [7, 8]),
+    ]);
+    const error = [all, movies, shows, anime, dv5, dv78].find((result) => result.error)?.error;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({
+      total: all.count || 0,
+      movies: movies.count || 0,
+      shows: shows.count || 0,
+      anime: anime.count || 0,
+      dv5: dv5.count || 0,
+      dv78: dv78.count || 0,
+    });
+  }
+
+  if (resource === "folders") {
+    const path = cleanFolderPath(searchParams.get("path"));
+    const { data: files, error: filesError } = await auth.admin
+      .from("media_library")
+      .select("*")
+      .eq("folder_path", path)
+      .order("title", { ascending: true })
+      .range(offset, offset + limit - 1);
+    if (filesError) {
+      return NextResponse.json({ error: filesError.message }, { status: 500 });
+    }
+
+    const allPaths: Array<{ folder_path: string | null }> = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await auth.admin
+        .from("media_library")
+        .select("folder_path")
+        .range(from, from + 999);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      allPaths.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+
+    const currentSegments = path === "/" ? [] : path.split("/").filter(Boolean);
+    const folders = new Set<string>();
+    for (const row of allPaths) {
+      const folderPath = cleanFolderPath(row.folder_path);
+      const segments = folderPath.split("/").filter(Boolean);
+      if (
+        segments.length > currentSegments.length &&
+        currentSegments.every((segment, index) => segments[index] === segment)
+      ) {
+        folders.add(segments[currentSegments.length]);
+      }
+    }
+    return NextResponse.json({
+      path,
+      folders: Array.from(folders).sort((a, b) => a.localeCompare(b)),
+      files: (files || []).map((item) => normalizeMedia(item, auth.user.id)),
+    });
+  }
+
+  if (resource === "watchlist-media") {
+    const { data: saved, error: savedError } = await auth.admin
+      .from("watchlist")
+      .select("media_id")
+      .eq("user_id", auth.user.id);
+    if (savedError) {
+      return NextResponse.json({ error: savedError.message }, { status: 500 });
+    }
+    const ids = (saved || []).map((item) => item.media_id).filter(Boolean);
+    if (ids.length === 0) return NextResponse.json([]);
+    const page = ids.slice(offset, offset + limit);
+    const { data, error } = await auth.admin
+      .from("media_library")
+      .select("*")
+      .in("id", page);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json((data || []).map((item) => normalizeMedia(item, auth.user.id)));
+  }
+
   let catalog = auth.admin
     .from("media_library")
     .select("*")
@@ -133,6 +226,75 @@ export async function POST(request: NextRequest) {
     position?: number;
     completed?: boolean;
   } | null;
+
+  if (body?.action === "sync") {
+    try {
+      const result = await new DriveSyncService().sync({
+        full: true,
+        pruneMissing: true,
+      });
+      return NextResponse.json({ success: true, ...result });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Library synchronization failed." },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (body?.action === "metadata") {
+    try {
+      const result = await new MetadataSyncService().syncBatch(200);
+      return NextResponse.json({ success: true, ...result });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Metadata synchronization failed." },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (body?.action === "embeddings") {
+    const { data: missing, error } = await auth.admin
+      .from("media_library")
+      .select("id,title,series,overview,media_type")
+      .is("embedding", null)
+      .limit(50);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const embedder = new EmbeddingService();
+    let processed = 0;
+    for (const item of missing || []) {
+      const description = [
+        item.series || item.title,
+        item.media_type === "movie" ? "Movie" : item.media_type === "anime" ? "Anime" : "TV Show",
+        item.overview || "",
+      ].filter(Boolean).join(" - ");
+      try {
+        const embedding = await embedder.getEmbedding(description);
+        const { error: updateError } = await auth.admin
+          .from("media_library")
+          .update({ embedding })
+          .eq("id", item.id);
+        if (!updateError) processed++;
+      } catch (embeddingError) {
+        console.error("[Native API] Embedding generation failed:", embeddingError);
+      }
+    }
+    const { count } = await auth.admin
+      .from("media_library")
+      .select("id", { count: "exact", head: true })
+      .is("embedding", null);
+    return NextResponse.json({
+      success: true,
+      processed,
+      remaining: count || 0,
+      message: processed === 0
+        ? "All library files are already embedded."
+        : `Generated ${processed} embeddings.`,
+    });
+  }
+
   if (!body?.mediaId) {
     return NextResponse.json({ error: "Missing media identifier." }, { status: 400 });
   }

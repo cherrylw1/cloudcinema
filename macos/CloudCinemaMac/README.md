@@ -8,8 +8,13 @@ Run `./scripts/build-macos-app.sh` from the repository root. The script uses the
 installed Swift toolchain, bundles the libmpv/FFmpeg runtime from IINA, applies
 local ad-hoc signing, and creates both `.app` and `.dmg` artifacts.
 
-The web application remains a separate target. The only shared addition is the
-authenticated `/api/native` JSON contract.
+The web application remains a separate target. The clients share the
+authenticated `/api/native` JSON contract for catalog browsing, folders,
+watchlist, progress, library synchronization, metadata, and statistics.
+
+Playback uses libmpv's supported macOS render API through a small Cocoa bridge.
+The app bundles the IINA playback runtime, so installed builds do not launch an
+external player.
 
 Google authentication uses the registered `cloudcinema-mac-v2` URL scheme. The
 pending nonce is persisted so the callback remains valid if macOS relaunches

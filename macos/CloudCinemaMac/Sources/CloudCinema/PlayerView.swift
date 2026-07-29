@@ -17,6 +17,16 @@ struct PlayerView: View {
             MPVSurface(engine: engine)
                 .ignoresSafeArea()
 
+            if engine.errorMessage == nil, engine.duration == 0 {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .controlSize(.large)
+                    Text("Opening \(media.displayTitle)")
+                        .font(.headline)
+                }
+                .foregroundStyle(.white)
+            }
+
             if let error = engine.errorMessage {
                 ContentUnavailableView(
                     "Playback unavailable",
