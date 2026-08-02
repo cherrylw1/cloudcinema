@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { Button } from "@/components/ui/button";
@@ -8,11 +9,13 @@ import { Database, RefreshCw, AlertCircle, CheckCircle2, Film, Laptop, Smartphon
 import { getMediaStatsAction } from "@/server/actions/media-actions";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [result, setResult] = useState<{
     scanned: number;
     added: number;
     updated: number;
+    removed: number;
     skipped: number;
     message?: string;
   } | null>(null);
@@ -67,10 +70,12 @@ export default function SettingsPage() {
           scanned: data.scanned ?? 0,
           added: data.added ?? 0,
           updated: data.updated ?? 0,
+          removed: data.removed ?? 0,
           skipped: data.skipped ?? 0,
           message: data.message,
         });
         await fetchStats(); // Refresh stats after sync
+        router.refresh();
       } else {
         setError(data.error || "An error occurred during library synchronization.");
       }
@@ -221,7 +226,7 @@ export default function SettingsPage() {
               <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
               <div className="space-y-2 w-full">
                 <p className="font-medium">Sync Complete</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1 text-foreground">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 pt-1 text-foreground">
                   <div className="bg-card/40 border border-border/55 p-3 rounded-lg text-center">
                     <span className="block text-xl font-bold">{result.scanned}</span>
                     <span className="text-[10px] text-foreground/50 uppercase tracking-wider">Scanned</span>
@@ -233,6 +238,10 @@ export default function SettingsPage() {
                   <div className="bg-card/40 border border-border/55 p-3 rounded-lg text-center">
                     <span className="block text-xl font-bold text-blue-500">{result.updated}</span>
                     <span className="text-[10px] text-foreground/50 uppercase tracking-wider">Updated</span>
+                  </div>
+                  <div className="bg-card/40 border border-border/55 p-3 rounded-lg text-center">
+                    <span className="block text-xl font-bold text-red-500">{result.removed}</span>
+                    <span className="text-[10px] text-foreground/50 uppercase tracking-wider">Removed</span>
                   </div>
                   <div className="bg-card/40 border border-border/55 p-3 rounded-lg text-center">
                     <span className="block text-xl font-bold text-foreground/50">{result.skipped}</span>
@@ -357,7 +366,7 @@ export default function SettingsPage() {
                 <h4 className="text-sm font-semibold text-foreground">Android & TV: Play in Just Player</h4>
               </div>
               <p className="text-xs text-foreground/60 leading-relaxed">
-                VLC often suffers from buffering or hardware decoding lag on mobile. For buttery-smooth 120Hz playback on Android phones and TV, we recommend <strong>Just Player</strong>, an ad-free, lightweight player built on Google's native ExoPlayer library.
+                VLC often suffers from buffering or hardware decoding lag on mobile. For buttery-smooth 120Hz playback on Android phones and TV, we recommend <strong>Just Player</strong>, an ad-free, lightweight player built on Google&apos;s native ExoPlayer library.
               </p>
 
               <div className="bg-card/25 border border-border/40 p-4 rounded-xl space-y-2">
