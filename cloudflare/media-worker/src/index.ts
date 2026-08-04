@@ -88,7 +88,7 @@ function objectHeaders(object: R2ObjectBody) {
   return headers;
 }
 
-async function handleMedia(request: Request, env: Env, mediaId: string) {
+async function handleMedia(request: Request, env: Env, mediaId: string, kind: "hls" | "media") {
   const url = new URL(request.url);
   const key = url.searchParams.get("key");
   const expires = Number(url.searchParams.get("exp"));
@@ -97,7 +97,8 @@ async function handleMedia(request: Request, env: Env, mediaId: string) {
   if (!key || !Number.isSafeInteger(expires) || expires < Math.floor(Date.now() / 1000)) {
     return new Response("Invalid or expired media URL.", { status: 401, headers: corsHeaders() });
   }
-  if (!key.startsWith(`hls/${mediaId}/`)) {
+  const expectedPrefix = kind === "hls" ? `hls/${mediaId}/` : `originals/${mediaId}/`;
+  if (!key.startsWith(expectedPrefix)) {
     return new Response("Media URL does not match the requested title.", { status: 403, headers: corsHeaders() });
   }
 
@@ -169,9 +170,9 @@ export default {
     }
 
     const pathname = new URL(request.url).pathname;
-    const match = /^\/hls\/([^/]+)$/.exec(pathname);
+    const match = /^\/(hls|media)\/([^/]+)$/.exec(pathname);
     if (!match) return new Response("Not found.", { status: 404, headers: corsHeaders() });
 
-    return handleMedia(request, env, decodeURIComponent(match[1]));
+    return handleMedia(request, env, decodeURIComponent(match[2]), match[1] as "hls" | "media");
   },
 };

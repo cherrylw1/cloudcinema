@@ -51,6 +51,10 @@ export function r2KeyForRendition(
   return `hls/${mediaId}/${driveFileId}/${suffix}.mp4`;
 }
 
+export function r2KeyForOriginal(mediaId: string, driveFileId: string) {
+  return `originals/${mediaId}/${driveFileId}/source`;
+}
+
 export async function uploadR2Object(options: R2UploadOptions) {
   const config = getR2StorageConfig();
   if (!config) return null;

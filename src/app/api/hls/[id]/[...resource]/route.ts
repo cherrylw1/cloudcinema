@@ -1,11 +1,11 @@
 import { Readable } from "stream";
-import { createHmac } from "node:crypto";
 import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/clients/supabase/server";
 import { createAdminClient } from "@/clients/supabase/admin";
 import { env } from "@/config/env";
 import type { HlsManifest } from "@/repositories/media";
+import { signedR2ObjectUrl } from "@/server/r2-delivery";
 
 export const dynamic = "force-dynamic";
 
@@ -17,18 +17,7 @@ function signedR2MediaUrl(
   mediaId: string,
   rendition: HlsManifest["video"] | HlsManifest["audio"][number],
 ) {
-  if (!rendition.r2Key || !env.mediaCdnBaseUrl || !env.mediaCdnSigningSecret) {
-    return null;
-  }
-
-  const expires = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
-  const payload = `${mediaId}\n${rendition.r2Key}\n${expires}`;
-  const signature = createHmac("sha256", env.mediaCdnSigningSecret)
-    .update(payload)
-    .digest("hex");
-  const baseUrl = env.mediaCdnBaseUrl.replace(/\/$/, "");
-
-  return `${baseUrl}/hls/${encodeURIComponent(mediaId)}?key=${encodeURIComponent(rendition.r2Key)}&exp=${expires}&sig=${signature}`;
+  return rendition.r2Key ? signedR2ObjectUrl(mediaId, rendition.r2Key, "hls") : null;
 }
 
 async function driveProxyMediaUrl(

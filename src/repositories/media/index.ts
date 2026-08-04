@@ -52,10 +52,19 @@ export interface HlsManifest {
   audio: HlsAudioRendition[];
 }
 
+export interface R2Original {
+  key: string;
+  driveFileId: string;
+  fileSize: number;
+  contentType: string;
+  r2Etag?: string;
+}
+
 export interface StreamMetadata {
   version: 2;
   tracks: AudioStream[];
   browserHls: HlsManifest;
+  r2Original?: R2Original;
 }
 
 export interface Media {
