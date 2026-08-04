@@ -2,6 +2,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { createClient } from "@/clients/supabase/server";
 import { GroupingClient } from "./GroupingClient";
 import { MEDIA_CARD_COLUMNS, type Media } from "@/repositories/media";
+import { MediaLoadError } from "@/components/media/MediaLoadError";
 import type { Database } from "@/types/database";
 
 type MediaRow_DB = Database["public"]["Tables"]["media_library"]["Row"];
@@ -39,10 +40,22 @@ export default async function GroupPage() {
   const supabase = await createClient();
 
   // Fetch all media files to display in the editor
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("media_library")
     .select(MEDIA_CARD_COLUMNS)
     .order("title", { ascending: true });
+
+  if (error) {
+    console.error("[Group page] Failed to load media catalog:", error);
+    return (
+      <PageContainer
+        title="Group Files into TV Series"
+        description="Select multiple files and group them into a single TV Show/Anime series folder."
+      >
+        <MediaLoadError href="/library/group" />
+      </PageContainer>
+    );
+  }
 
   const mediaList = ((data || []) as unknown as MediaRow_DB[]).map(dbRowToMedia);
 

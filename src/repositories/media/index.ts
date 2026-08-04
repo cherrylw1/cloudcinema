@@ -104,9 +104,16 @@ export interface Media {
 }
 
 // List and home cards do not need stream metadata or vector embeddings.
-// Keeping this projection shared prevents large JSON payloads on navigation.
+// Keep this base projection limited to columns that predate optional ranking
+// enrichment so the core catalog remains available during a partial migration.
 export const MEDIA_CARD_COLUMNS =
-  "id, drive_file_id, title, series, season, episode, media_type, poster_url, backdrop_url, overview, runtime, file_size, tmdb_id, tmdb_popularity, tmdb_vote_average, tmdb_vote_count, tmdb_genre_ids, tmdb_original_language, mime_type, dv_profile, audio_codec, processing_status, processed_drive_file_id, folder_path, created_at, updated_at" as const;
+  "id, drive_file_id, title, series, season, episode, media_type, poster_url, backdrop_url, overview, runtime, file_size, tmdb_id, mime_type, dv_profile, audio_codec, processing_status, processed_drive_file_id, folder_path, created_at, updated_at" as const;
+
+// Added by the optional recommendation-metadata migration. Pages can request
+// these fields as an enhancement, but must fall back to MEDIA_CARD_COLUMNS if
+// the migration has not reached the deployed database yet.
+export const MEDIA_CARD_COLUMNS_WITH_RANKING =
+  `${MEDIA_CARD_COLUMNS}, tmdb_popularity, tmdb_vote_average, tmdb_vote_count, tmdb_genre_ids, tmdb_original_language` as const;
 
 export interface MediaRepository {
   getMediaList(options?: {

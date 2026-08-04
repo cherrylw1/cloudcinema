@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/clients/supabase/admin";
 import { parseAndCleanTitle } from "@/lib/title-parser";
+import { isRecommendationMetadataSchemaError } from "@/lib/recommendation-metadata";
 import { TmdbService, type TmdbMetadata } from "./tmdb-service";
+import type { Database } from "@/types/database";
 
 export interface MetadataSyncResult {
   processed: number;
@@ -190,35 +192,46 @@ export class MetadataSyncService {
       tmdbMatch.originalLanguage === "ja";
     const updatedMediaType = isAnime ? "anime" : undefined;
 
-    const update = {
+    const baseUpdate: Database["public"]["Tables"]["media_library"]["Update"] = {
       tmdb_id: tmdbMatch.id,
       title: tmdbMatch.title,
       poster_url: posterUrl,
       backdrop_url: backdropUrl,
       overview: tmdbMatch.overview,
       runtime: tmdbMatch.runtime,
+      ...(updatedMediaType ? { media_type: updatedMediaType } : {}),
+    };
+    const update: Database["public"]["Tables"]["media_library"]["Update"] = {
+      ...baseUpdate,
       tmdb_popularity: tmdbMatch.popularity,
       tmdb_vote_average: tmdbMatch.voteAverage,
       tmdb_vote_count: tmdbMatch.voteCount,
       tmdb_genre_ids: tmdbMatch.genreIds,
       tmdb_original_language: tmdbMatch.originalLanguage,
-      ...(updatedMediaType ? { media_type: updatedMediaType } : {}),
     };
 
-    if (group.type === "tv" && group.rows[0].series) {
-      const { error } = await this.adminClient
+    const applyUpdate = (payload: Database["public"]["Tables"]["media_library"]["Update"]) => {
+      if (group.type === "tv" && group.rows[0].series) {
+        return this.adminClient
+          .from("media_library")
+          .update(payload)
+          .eq("series", group.rows[0].series)
+          .in("media_type", ["tv-show", "anime"]);
+      }
+
+      return this.adminClient
         .from("media_library")
-        .update(update)
-        .eq("series", group.rows[0].series)
-        .in("media_type", ["tv-show", "anime"]);
-      if (error) throw error;
-    } else {
-      const { error } = await this.adminClient
-        .from("media_library")
-        .update(update)
+        .update(payload)
         .in("id", group.rows.map((row) => row.id));
-      if (error) throw error;
+    };
+
+    let updateResponse = await applyUpdate(update);
+    if (updateResponse.error && isRecommendationMetadataSchemaError(updateResponse.error)) {
+      console.warn("[Metadata Sync] Ranking columns are unavailable; saving core metadata only.");
+      updateResponse = await applyUpdate(baseUpdate);
     }
+
+    if (updateResponse.error) throw updateResponse.error;
 
     result.matched += group.rows.length;
     if (isAnime) result.reclassifiedAnime += group.rows.length;

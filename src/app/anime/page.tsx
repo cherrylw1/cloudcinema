@@ -1,6 +1,7 @@
 import { PageContainer } from "@/components/layout/PageContainer";
 import { createClient } from "@/clients/supabase/server";
 import { SeriesCard } from "@/components/media/SeriesCard";
+import { MediaLoadError } from "@/components/media/MediaLoadError";
 import { MEDIA_CARD_COLUMNS, type Media } from "@/repositories/media";
 import type { Database } from "@/types/database";
 
@@ -37,11 +38,23 @@ function dbRowToMedia(row: MediaRow_DB): Media {
 
 export default async function AnimePage() {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("media_library")
     .select(MEDIA_CARD_COLUMNS)
     .eq("media_type", "anime")
     .order("series", { ascending: true });
+
+  if (error) {
+    console.error("[Anime] Failed to load media catalog:", error);
+    return (
+      <PageContainer
+        title="Anime"
+        description="Browse your indexed anime collections and series."
+      >
+        <MediaLoadError href="/anime" />
+      </PageContainer>
+    );
+  }
 
   const allEpisodes = ((data || []) as unknown as MediaRow_DB[]).map(dbRowToMedia);
 

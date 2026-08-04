@@ -1,12 +1,13 @@
 import { PageContainer } from "@/components/layout/PageContainer";
 import { createClient } from "@/clients/supabase/server";
 import { SeriesCard } from "@/components/media/SeriesCard";
-import type { Media } from "@/repositories/media";
+import { MEDIA_CARD_COLUMNS, type Media } from "@/repositories/media";
+import { MediaLoadError } from "@/components/media/MediaLoadError";
 import type { Database } from "@/types/database";
 import { redirect } from "next/navigation";
 
 const WATCHLIST_SELECT =
-  "id, user_id, media_id, created_at, media_library:media_id (id, drive_file_id, title, series, season, episode, media_type, poster_url, backdrop_url, overview, runtime, file_size, tmdb_id, tmdb_popularity, tmdb_vote_average, tmdb_vote_count, tmdb_genre_ids, tmdb_original_language, mime_type, dv_profile, audio_codec, processing_status, processed_drive_file_id, folder_path, created_at, updated_at)" as const;
+  `id, user_id, media_id, created_at, media_library:media_id (${MEDIA_CARD_COLUMNS})` as const;
 
 type MediaRow_DB = Database["public"]["Tables"]["media_library"]["Row"];
 
@@ -55,6 +56,14 @@ export default async function WatchlistPage() {
 
   if (error) {
     console.error("Error fetching watchlist:", error);
+    return (
+      <PageContainer
+        title="My Watchlist"
+        description="Keep track of the movies and series you want to watch."
+      >
+        <MediaLoadError href="/watchlist" />
+      </PageContainer>
+    );
   }
 
   const watchlistItems = (data || [])

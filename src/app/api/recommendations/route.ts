@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/clients/supabase/server";
 import { createAdminClient } from "@/clients/supabase/admin";
 import type { Database } from "@/types/database";
+import { isRecommendationMetadataSchemaError } from "@/lib/recommendation-metadata";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -121,16 +122,34 @@ export async function POST() {
     const similarityRowList = ((similarityRows || []) as MediaRow[])
       .filter((row) => row.media_type !== "anime" && row.poster_url);
 
-    const { data: generalRows } = await supabase
+    const generalQuery = () => supabase
       .from("media_library")
       .select("*")
       .in("media_type", ["movie", "tv-show"])
       .not("tmdb_id", "is", null)
-      .not("poster_url", "is", null)
+      .not("poster_url", "is", null);
+
+    const rankedGeneral = await generalQuery()
       .order("tmdb_vote_average", { ascending: false, nullsFirst: false })
       .limit(240);
 
-    const allCandidates = [...similarityRowList, ...((generalRows || []) as MediaRow[])];
+    let generalRows: MediaRow[];
+    if (rankedGeneral.error) {
+      if (!isRecommendationMetadataSchemaError(rankedGeneral.error)) {
+        throw rankedGeneral.error;
+      }
+
+      console.warn("[Recommendations API] Ranking metadata is unavailable; using recent titles.");
+      const fallbackGeneral = await generalQuery()
+        .order("created_at", { ascending: false })
+        .limit(240);
+      if (fallbackGeneral.error) throw fallbackGeneral.error;
+      generalRows = (fallbackGeneral.data || []) as MediaRow[];
+    } else {
+      generalRows = (rankedGeneral.data || []) as MediaRow[];
+    }
+
+    const allCandidates = [...similarityRowList, ...generalRows];
     const candidatesByKey = new Map<string, MediaRow[]>();
     for (const row of allCandidates) {
       const key = canonicalKey(row);
@@ -146,7 +165,11 @@ export async function POST() {
         const similarity = Math.max(...rows.map((candidate) => similarityById.get(candidate.id) || 0));
         return { row, key, similarity, score: rankScore(row, similarity) };
       })
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) =>
+        b.score - a.score ||
+        b.row.created_at.localeCompare(a.row.created_at) ||
+        a.row.id.localeCompare(b.row.id),
+      );
 
     const recommendations = rankedCandidates.slice(0, 12).map(({ row, similarity }) => ({
       id: row.id,

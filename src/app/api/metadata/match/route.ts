@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/clients/supabase/admin";
+import { isRecommendationMetadataSchemaError } from "@/lib/recommendation-metadata";
+import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
@@ -81,24 +83,31 @@ export async function POST(request: NextRequest) {
         ? `https://image.tmdb.org/t/p/w1280${movieDetails.backdrop_path}`
         : null;
 
-      const { error } = await adminClient
-        .from("media_library")
-        .update({
-          tmdb_id: movieDetails.id,
-          title: movieDetails.title,
-          poster_url: posterUrl,
-          backdrop_url: backdropUrl,
-          overview: movieDetails.overview || null,
-          runtime: movieDetails.runtime ?? null,
-          tmdb_popularity: movieDetails.popularity ?? null,
-          tmdb_vote_average: movieDetails.vote_average ?? null,
-          tmdb_vote_count: movieDetails.vote_count ?? null,
-          tmdb_genre_ids: movieDetails.genres?.map((genre) => genre.id) ?? [],
-          tmdb_original_language: movieDetails.original_language ?? null,
-        })
-        .eq("id", mediaId!);
+      const baseUpdate: Database["public"]["Tables"]["media_library"]["Update"] = {
+        tmdb_id: movieDetails.id,
+        title: movieDetails.title,
+        poster_url: posterUrl,
+        backdrop_url: backdropUrl,
+        overview: movieDetails.overview || null,
+        runtime: movieDetails.runtime ?? null,
+      };
+      const update: Database["public"]["Tables"]["media_library"]["Update"] = {
+        ...baseUpdate,
+        tmdb_popularity: movieDetails.popularity ?? null,
+        tmdb_vote_average: movieDetails.vote_average ?? null,
+        tmdb_vote_count: movieDetails.vote_count ?? null,
+        tmdb_genre_ids: movieDetails.genres?.map((genre) => genre.id) ?? [],
+        tmdb_original_language: movieDetails.original_language ?? null,
+      };
+      const applyUpdate = (payload: Database["public"]["Tables"]["media_library"]["Update"]) =>
+        adminClient.from("media_library").update(payload).eq("id", mediaId!);
 
-      if (error) throw error;
+      let updateResponse = await applyUpdate(update);
+      if (updateResponse.error && isRecommendationMetadataSchemaError(updateResponse.error)) {
+        console.warn("[API /metadata/match] Ranking columns are unavailable; saving core metadata only.");
+        updateResponse = await applyUpdate(baseUpdate);
+      }
+      if (updateResponse.error) throw updateResponse.error;
 
       return NextResponse.json({
         success: true,
@@ -151,24 +160,31 @@ export async function POST(request: NextRequest) {
       const mediaType = isAnimation && isJapanese ? "anime" : "tv-show";
 
       // Update ALL episodes with this series name
-      const { error } = await adminClient
-        .from("media_library")
-        .update({
-          tmdb_id: tvDetails.id,
-          poster_url: posterUrl,
-          backdrop_url: backdropUrl,
-          overview: tvDetails.overview || null,
-          runtime,
-          tmdb_popularity: tvDetails.popularity ?? null,
-          tmdb_vote_average: tvDetails.vote_average ?? null,
-          tmdb_vote_count: tvDetails.vote_count ?? null,
-          tmdb_genre_ids: genreIds,
-          tmdb_original_language: tvDetails.original_language,
-          media_type: mediaType,
-        })
-        .eq("series", seriesName!);
+      const baseUpdate: Database["public"]["Tables"]["media_library"]["Update"] = {
+        tmdb_id: tvDetails.id,
+        poster_url: posterUrl,
+        backdrop_url: backdropUrl,
+        overview: tvDetails.overview || null,
+        runtime,
+        media_type: mediaType,
+      };
+      const update: Database["public"]["Tables"]["media_library"]["Update"] = {
+        ...baseUpdate,
+        tmdb_popularity: tvDetails.popularity ?? null,
+        tmdb_vote_average: tvDetails.vote_average ?? null,
+        tmdb_vote_count: tvDetails.vote_count ?? null,
+        tmdb_genre_ids: genreIds,
+        tmdb_original_language: tvDetails.original_language,
+      };
+      const applyUpdate = (payload: Database["public"]["Tables"]["media_library"]["Update"]) =>
+        adminClient.from("media_library").update(payload).eq("series", seriesName!);
 
-      if (error) throw error;
+      let updateResponse = await applyUpdate(update);
+      if (updateResponse.error && isRecommendationMetadataSchemaError(updateResponse.error)) {
+        console.warn("[API /metadata/match] Ranking columns are unavailable; saving core metadata only.");
+        updateResponse = await applyUpdate(baseUpdate);
+      }
+      if (updateResponse.error) throw updateResponse.error;
 
       return NextResponse.json({
         success: true,

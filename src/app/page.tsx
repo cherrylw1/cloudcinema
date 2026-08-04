@@ -3,7 +3,12 @@ import { createClient } from "@/clients/supabase/server";
 import { MediaRow } from "@/components/media/MediaRow";
 import { RecommendationsRevalidator } from "@/components/media/RecommendationsRevalidator";
 import { CinematicHero } from "@/components/media/CinematicHero";
-import { MEDIA_CARD_COLUMNS, type Media } from "@/repositories/media";
+import { MediaLoadError } from "@/components/media/MediaLoadError";
+import {
+  MEDIA_CARD_COLUMNS,
+  MEDIA_CARD_COLUMNS_WITH_RANKING,
+  type Media,
+} from "@/repositories/media";
 import type { Database } from "@/types/database";
 import { TmdbService } from "@/server/services/tmdb-service";
 
@@ -11,7 +16,8 @@ type MediaRow_DB = Database["public"]["Tables"]["media_library"]["Row"];
 
 const HOME_MEDIA_COLUMNS = MEDIA_CARD_COLUMNS;
 const HOME_PROGRESS_SELECT =
-  "playback_position, last_watched, completed, media_library:media_id (id, drive_file_id, title, series, season, episode, media_type, poster_url, backdrop_url, overview, runtime, file_size, tmdb_id, tmdb_popularity, tmdb_vote_average, tmdb_vote_count, tmdb_genre_ids, tmdb_original_language, mime_type, dv_profile, audio_codec, processing_status, processed_drive_file_id, folder_path, created_at, updated_at)" as const;
+  `playback_position, last_watched, completed, media_library:media_id (${HOME_MEDIA_COLUMNS})` as const;
+const HOME_RANKED_MEDIA_COLUMNS = MEDIA_CARD_COLUMNS_WITH_RANKING;
 
 function dbRowToMedia(row: MediaRow_DB): Media {
   return {
@@ -100,12 +106,16 @@ export default async function Home() {
   let userWatchHistory: { tmdbId: number | null; mediaType: string }[] = [];
 
   if (user) {
-    const { data } = await supabase
+    const { data, error: progressError } = await supabase
       .from("user_progress")
       .select(HOME_PROGRESS_SELECT)
       .eq("profile_id", user.id)
       .order("last_watched", { ascending: false })
       .limit(40);
+
+    if (progressError) {
+      console.error("[Home] Failed to load watch progress:", progressError);
+    }
 
     if (data) {
       // Get active in-progress items
@@ -146,10 +156,25 @@ export default async function Home() {
       .limit(320),
     supabase
       .from("media_library")
-      .select(HOME_MEDIA_COLUMNS)
+      .select(HOME_RANKED_MEDIA_COLUMNS)
       .order("tmdb_vote_average", { ascending: false, nullsFirst: false })
       .limit(320),
   ]);
+
+  if (recentCatalogRes.error) {
+    console.error("[Home] Failed to load media catalog:", recentCatalogRes.error);
+    return (
+      <div className="min-h-screen bg-black px-4 py-12 text-white md:px-16">
+        <MediaLoadError href="/" />
+      </div>
+    );
+  }
+
+  if (rankedCatalogRes.error) {
+    // Ranking metadata is optional. The recent catalog query above is the
+    // source of truth when that migration is not available yet.
+    console.warn("[Home] Recommendation ranking is unavailable; using catalog fallback.");
+  }
   const catalogMap = new Map<string, Media>();
   for (const row of [...(recentCatalogRes.data || []), ...(rankedCatalogRes.data || [])]) {
     catalogMap.set(row.id, dbRowToMedia(row as MediaRow_DB));
