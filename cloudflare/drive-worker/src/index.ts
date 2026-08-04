@@ -4,7 +4,10 @@ interface DriveMetadata {
 }
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
-const RANGE_SIZE = 64 * 1024 * 1024;
+// Keep the initial response bounded, but honor the range requested by players.
+// Desktop players commonly use an open-ended range and expect one continuous
+// response instead of a sequence of small server-imposed chunks.
+const INITIAL_RANGE_SIZE = 256 * 1024 * 1024;
 
 function corsHeaders() {
   return {
@@ -27,7 +30,7 @@ function parseSize(value: string | null) {
 
 function parseRange(value: string | null, size: number) {
   if (!value) {
-    return { start: 0, end: Math.min(RANGE_SIZE - 1, size - 1) };
+    return { start: 0, end: Math.min(INITIAL_RANGE_SIZE - 1, size - 1) };
   }
 
   const match = /^bytes=(\d+)-(\d*)$/.exec(value);
@@ -40,7 +43,7 @@ function parseRange(value: string | null, size: number) {
 
   return {
     start,
-    end: Math.min(requestedEnd, start + RANGE_SIZE - 1, size - 1),
+    end: Math.min(requestedEnd, size - 1),
   };
 }
 
