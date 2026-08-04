@@ -5,8 +5,6 @@ import { google } from "googleapis";
 import { env } from "@/config/env";
 import { Readable } from "stream";
 import { verifyStreamToken } from "@/lib/token";
-import { signedR2ObjectUrl } from "@/server/r2-delivery";
-import type { R2Original } from "@/repositories/media";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +69,7 @@ export async function GET(
   // 4. Fetch the Drive file ID and metadata from the media library database (using adminSupabase to bypass RLS)
   const { data: media, error: dbError } = await adminSupabase
     .from("media_library")
-    .select("drive_file_id, processed_drive_file_id, mime_type, file_size, audio_streams")
+    .select("drive_file_id, processed_drive_file_id, mime_type, file_size")
     .eq("id", id)
     .maybeSingle();
 
@@ -106,21 +104,6 @@ export async function GET(
   const fileId = driveFileId || media.processed_drive_file_id || media.drive_file_id;
   const mimeType = driveFileId ? "video/mp4" : (media.mime_type || "video/mp4");
   let fileSize = media.file_size;
-  const streamMetadata = media.audio_streams && !Array.isArray(media.audio_streams)
-    ? media.audio_streams as { r2Original?: R2Original }
-    : null;
-  const r2Original = streamMetadata?.r2Original;
-
-  // External players use this route for the original file. Once that exact
-  // Drive source has been copied to R2, redirect directly to the signed R2
-  // object so Vercel only handles authentication and URL creation.
-  if (r2Original?.key && r2Original.driveFileId === fileId) {
-    const r2Url = signedR2ObjectUrl(id, r2Original.key, "media");
-    if (r2Url) {
-      return NextResponse.redirect(r2Url);
-    }
-    fileSize = r2Original.fileSize || fileSize;
-  }
 
   try {
     // 5. Initialize the Google Drive Client

@@ -1,0 +1,5 @@
+{
+  "name": "cloudcinema-drive-worker",
+  "private": true,
+  "type": "module"
+}
