@@ -27,6 +27,7 @@ export default function SettingsPage() {
     matched: number;
     unmatched: number;
     reclassifiedAnime: number;
+    remaining: number;
     message?: string;
   } | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
@@ -92,21 +93,47 @@ export default function SettingsPage() {
     setMetaResult(null);
 
     try {
-      const res = await fetch("/api/metadata-sync", { method: "POST" });
-      const data = await res.json();
-      
-      if (res.ok && data.success) {
-        setMetaResult({
-          processed: data.processed ?? 0,
-          matched: data.matched ?? 0,
-          unmatched: data.unmatched ?? 0,
-          reclassifiedAnime: data.reclassifiedAnime ?? 0,
-          message: data.message,
+      const totals = {
+        processed: 0,
+        matched: 0,
+        unmatched: 0,
+        reclassifiedAnime: 0,
+      };
+      let remaining = 1;
+      let retryUnmatched = true;
+
+      while (remaining > 0) {
+        const res = await fetch("/api/metadata-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ retryUnmatched }),
         });
-        await fetchStats(); // Refresh stats after metadata sync
-      } else {
-        setMetaError(data.error || "An error occurred during metadata synchronization.");
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "An error occurred during metadata synchronization.");
+        }
+
+        totals.processed += data.processed ?? 0;
+        totals.matched += data.matched ?? 0;
+        totals.unmatched += data.unmatched ?? 0;
+        totals.reclassifiedAnime += data.reclassifiedAnime ?? 0;
+        remaining = data.remaining ?? 0;
+        retryUnmatched = false;
+
+        setMetaResult({
+          ...totals,
+          remaining,
+          message: remaining > 0 ? `Fetching metadata... ${remaining} files remaining.` : undefined,
+        });
+
+        // Avoid looping forever if a server-side failure leaves the queue unchanged.
+        if ((data.processed ?? 0) === 0 && remaining > 0) {
+          break;
+        }
       }
+
+      await fetchStats(); // Refresh stats after metadata sync
     } catch (err) {
       setMetaError(err instanceof Error ? err.message : "Failed to trigger metadata sync.");
     } finally {
@@ -268,7 +295,7 @@ export default function SettingsPage() {
               <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" />
               <div className="space-y-2 w-full">
                 <p className="font-medium">Metadata Sync Complete</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1 text-foreground">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 pt-1 text-foreground">
                   <div className="bg-card/40 border border-border/55 p-3 rounded-lg text-center">
                     <span className="block text-xl font-bold">{metaResult.processed}</span>
                     <span className="text-[10px] text-foreground/50 uppercase tracking-wider">Processed</span>
@@ -284,6 +311,10 @@ export default function SettingsPage() {
                   <div className="bg-card/40 border border-border/55 p-3 rounded-lg text-center">
                     <span className="block text-xl font-bold text-purple-500">{metaResult.reclassifiedAnime}</span>
                     <span className="text-[10px] text-foreground/50 uppercase tracking-wider">Anime Reclassified</span>
+                  </div>
+                  <div className="bg-card/40 border border-border/55 p-3 rounded-lg text-center">
+                    <span className="block text-xl font-bold text-amber-500">{metaResult.remaining}</span>
+                    <span className="text-[10px] text-foreground/50 uppercase tracking-wider">Still Unmatched</span>
                   </div>
                 </div>
               </div>

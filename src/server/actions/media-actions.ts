@@ -7,6 +7,7 @@ import { createClient } from "@/clients/supabase/server";
 
 export async function getMediaListAction(options?: {
   type?: "movie" | "tv-show" | "anime";
+  metadataMissing?: boolean;
   limit?: number;
   offset?: number;
   query?: string;

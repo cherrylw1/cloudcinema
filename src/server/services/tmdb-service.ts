@@ -11,22 +11,32 @@ export interface TmdbMetadata {
 
 export class TmdbService {
   private apiToken: string;
+  private apiKey: string;
   private baseUrl = "https://api.themoviedb.org/3";
 
   constructor() {
     this.apiToken = (process.env.TMDB_ACCESS_TOKEN || "").trim();
+    this.apiKey = (process.env.TMDB_API_KEY || "").trim();
+
+    if (!this.apiToken && !this.apiKey) {
+      throw new Error("TMDB credentials are not configured. Set TMDB_ACCESS_TOKEN or TMDB_API_KEY.");
+    }
   }
 
   private async request<T>(endpoint: string, params: Record<string, string>): Promise<T> {
     const searchParams = new URLSearchParams(params);
+    if (!this.apiToken && this.apiKey) {
+      searchParams.set("api_key", this.apiKey);
+    }
     const url = `${this.baseUrl}${endpoint}?${searchParams.toString()}`;
 
     const res = await fetch(url, {
       method: "GET",
       headers: {
         accept: "application/json",
-        authorization: `Bearer ${this.apiToken}`,
+        ...(this.apiToken ? { authorization: `Bearer ${this.apiToken}` } : {}),
       },
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!res.ok) {

@@ -1,14 +1,14 @@
 import { PageContainer } from "@/components/layout/PageContainer";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { createClient } from "@/clients/supabase/server";
-import { Film, Tv, Library, Sparkles, FolderPlus, Folder } from "lucide-react";
+import { Film, Tv, Library, Sparkles, FolderPlus, Folder, FileQuestion } from "lucide-react";
 import Link from "next/link";
 
 export default async function LibraryPage() {
   const supabase = await createClient();
 
   // Fetch counts in parallel using lightweight head queries
-  const [movieRes, tvShowRes, animeRes] = await Promise.all([
+  const [movieRes, tvShowRes, animeRes, missingMetadataRes] = await Promise.all([
     supabase
       .from("media_library")
       .select("*", { count: "exact", head: true })
@@ -21,11 +21,17 @@ export default async function LibraryPage() {
       .from("media_library")
       .select("*", { count: "exact", head: true })
       .eq("media_type", "anime"),
+    supabase
+      .from("media_library")
+      .select("*", { count: "exact", head: true })
+      .in("media_type", ["movie", "tv-show"])
+      .or("tmdb_id.is.null,tmdb_id.eq.-1"),
   ]);
 
   const movieCount = movieRes.count ?? 0;
   const tvShowCount = tvShowRes.count ?? 0;
   const animeCount = animeRes.count ?? 0;
+  const missingMetadataCount = missingMetadataRes.count ?? 0;
   const totalCount = movieCount + tvShowCount + animeCount;
 
   return (
@@ -63,7 +69,7 @@ export default async function LibraryPage() {
         </GlassCard>
 
         {/* Section Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
           {/* Movies Card */}
           <Link href="/movies" className="block group">
             <GlassCard className="p-6 space-y-4 bg-card/10 hover:bg-card/25 border border-border/40 transition-all duration-300">
@@ -151,6 +157,29 @@ export default async function LibraryPage() {
                 <h4 className="text-sm font-semibold text-foreground/80 mt-1">Folders</h4>
                 <p className="text-xs text-foreground/45 mt-0.5">
                   Browse original Google Drive directory structure.
+                </p>
+              </div>
+            </GlassCard>
+          </Link>
+
+          {/* Missing Metadata Card */}
+          <Link href="/library/missing-metadata" className="block group">
+            <GlassCard className="p-6 space-y-4 bg-card/10 hover:bg-card/25 border border-amber-500/20 transition-all duration-300">
+              <div className="flex justify-between items-start">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 group-hover:scale-105 transition-transform duration-300">
+                  <FileQuestion className="h-6 w-6" />
+                </div>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                  Review
+                </span>
+              </div>
+              <div>
+                <span className="text-3xl font-extrabold text-foreground tracking-tight">
+                  {missingMetadataCount}
+                </span>
+                <h4 className="text-sm font-semibold text-foreground/80 mt-1">Needs Metadata</h4>
+                <p className="text-xs text-foreground/45 mt-0.5">
+                  Movies and TV files without a TMDB match.
                 </p>
               </div>
             </GlassCard>

@@ -27,6 +27,7 @@ function streamMetadata(value: unknown) {
 export class SupabaseMediaRepository implements MediaRepository {
   async getMediaList(options?: {
     type?: "movie" | "tv-show" | "anime";
+    metadataMissing?: boolean;
     limit?: number;
     offset?: number;
     query?: string;
@@ -41,6 +42,12 @@ export class SupabaseMediaRepository implements MediaRepository {
 
     if (options?.type) {
       query = query.eq("media_type", options.type);
+    }
+
+    if (options?.metadataMissing) {
+      query = query
+        .in("media_type", ["movie", "tv-show"])
+        .or("tmdb_id.is.null,tmdb_id.eq.-1");
     }
 
     if (options?.query) {

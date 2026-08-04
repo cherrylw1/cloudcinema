@@ -12,11 +12,12 @@ import { RefreshCw } from "lucide-react";
 interface PaginatedMediaGridProps {
   initialMedia: Media[];
   type?: "movie" | "tv-show" | "anime";
+  metadataMissing?: boolean;
   query?: string;
   emptyStateMessage: string;
 }
 
-export function PaginatedMediaGrid({ initialMedia, type, query, emptyStateMessage }: PaginatedMediaGridProps) {
+export function PaginatedMediaGrid({ initialMedia, type, metadataMissing, query, emptyStateMessage }: PaginatedMediaGridProps) {
   const [mediaList, setMediaList] = useState<Media[]>(initialMedia);
   const [offset, setOffset] = useState(initialMedia.length);
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,7 @@ export function PaginatedMediaGrid({ initialMedia, type, query, emptyStateMessag
       const nextLimit = 60;
       const newItems = await getMediaListAction({
         type,
+        metadataMissing,
         query,
         limit: nextLimit,
         offset,

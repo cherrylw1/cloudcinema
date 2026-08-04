@@ -101,6 +101,7 @@ export interface Media {
 export interface MediaRepository {
   getMediaList(options?: {
     type?: "movie" | "tv-show" | "anime";
+    metadataMissing?: boolean;
     limit?: number;
     offset?: number;
     query?: string;
