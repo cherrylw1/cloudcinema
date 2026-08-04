@@ -1,0 +1,5 @@
+{
+  "name": "cloudcinema-media-worker",
+  "private": true,
+  "type": "module"
+}

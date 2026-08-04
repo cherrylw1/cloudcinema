@@ -55,6 +55,11 @@ export const env = {
 
   // GitHub Integration for Actions Offloading
   githubPat: getEnv("GITHUB_PAT"),
+
+  // Optional Cloudflare media delivery configuration
+  streamProxyUrl: getEnv("NEXT_PUBLIC_STREAM_PROXY_URL"),
+  mediaCdnBaseUrl: getEnv("MEDIA_CDN_BASE_URL"),
+  mediaCdnSigningSecret: getEnv("MEDIA_CDN_SIGNING_SECRET"),
 } as const;
 
 export type Env = typeof env;

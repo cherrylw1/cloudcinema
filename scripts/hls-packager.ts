@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import type { drive_v3 } from "googleapis";
 import type { HlsManifest } from "../src/repositories/media";
+import { r2KeyForRendition, uploadR2File } from "../src/server/r2-storage";
 
 interface MediaSource {
   input: string;
@@ -75,6 +76,24 @@ async function upload(
   };
 }
 
+async function uploadBrowserRenditionToR2(
+  mediaId: string,
+  driveFileId: string,
+  localPath: string,
+  kind: "video" | "audio",
+  index?: number,
+) {
+  const fileSize = fs.statSync(localPath).size;
+  const r2Key = r2KeyForRendition(mediaId, driveFileId, kind, index);
+  try {
+    const r2Etag = await uploadR2File(localPath, r2Key, "video/mp4", fileSize);
+    return r2Etag ? { r2Key, r2Etag } : {};
+  } catch (error) {
+    console.warn(`[HLS] R2 upload skipped for ${r2Key}:`, error);
+    return {};
+  }
+}
+
 export async function packageBrowserHls(options: PackageOptions): Promise<HlsManifest> {
   const workDir = fs.mkdtempSync(path.join(process.cwd(), `.hls-${options.mediaId}-`));
   const videoMedia = path.join(workDir, "video.mp4");
@@ -95,6 +114,12 @@ export async function packageBrowserHls(options: PackageOptions): Promise<HlsMan
       options.parentFolderId,
       videoMedia,
       `${options.title} [browser HLS video].mp4`,
+    );
+    const uploadedVideoR2 = await uploadBrowserRenditionToR2(
+      options.mediaId,
+      uploadedVideo.driveFileId,
+      videoMedia,
+      "video",
     );
 
     const audio: HlsManifest["audio"] = [];
@@ -121,9 +146,17 @@ export async function packageBrowserHls(options: PackageOptions): Promise<HlsMan
         audioMedia,
         `${options.title} [browser HLS audio ${track.index} - ${track.language}].mp4`,
       );
+      const uploadedAudioR2 = await uploadBrowserRenditionToR2(
+        options.mediaId,
+        uploadedAudio.driveFileId,
+        audioMedia,
+        "audio",
+        track.index,
+      );
 
       audio.push({
         ...uploadedAudio,
+        ...uploadedAudioR2,
         index: track.index,
         language: track.language,
         label: track.label,
@@ -137,6 +170,7 @@ export async function packageBrowserHls(options: PackageOptions): Promise<HlsMan
       version: 1,
       video: {
         ...uploadedVideo,
+        ...uploadedVideoR2,
         playlist: fs.readFileSync(videoPlaylist, "utf8"),
         codec: "avc1.640028",
         width: options.video.width,

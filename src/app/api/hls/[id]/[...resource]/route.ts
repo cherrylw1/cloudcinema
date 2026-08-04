@@ -1,4 +1,5 @@
 import { Readable } from "stream";
+import { createHmac } from "node:crypto";
 import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/clients/supabase/server";
@@ -10,6 +11,53 @@ export const dynamic = "force-dynamic";
 
 function quoteAttribute(value: string) {
   return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
+function signedR2MediaUrl(
+  mediaId: string,
+  rendition: HlsManifest["video"] | HlsManifest["audio"][number],
+) {
+  if (!rendition.r2Key || !env.mediaCdnBaseUrl || !env.mediaCdnSigningSecret) {
+    return null;
+  }
+
+  const expires = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
+  const payload = `${mediaId}\n${rendition.r2Key}\n${expires}`;
+  const signature = createHmac("sha256", env.mediaCdnSigningSecret)
+    .update(payload)
+    .digest("hex");
+  const baseUrl = env.mediaCdnBaseUrl.replace(/\/$/, "");
+
+  return `${baseUrl}/hls/${encodeURIComponent(mediaId)}?key=${encodeURIComponent(rendition.r2Key)}&exp=${expires}&sig=${signature}`;
+}
+
+async function driveProxyMediaUrl(
+  rendition: HlsManifest["video"] | HlsManifest["audio"][number],
+) {
+  if (!env.streamProxyUrl) return null;
+
+  const oauth2Client = new google.auth.OAuth2(
+    env.googleClientId,
+    env.googleClientSecret,
+    env.googleRedirectUri,
+  );
+  oauth2Client.setCredentials({ refresh_token: env.googleRefreshToken });
+  const tokenInfo = await oauth2Client.getAccessToken();
+  if (!tokenInfo.token) return null;
+
+  const url = new URL(env.streamProxyUrl);
+  url.searchParams.set("fileId", rendition.driveFileId);
+  url.searchParams.set("token", tokenInfo.token);
+  url.searchParams.set("fileSize", String(rendition.fileSize));
+  return url.toString();
+}
+
+async function mediaUrl(
+  mediaId: string,
+  rendition: HlsManifest["video"] | HlsManifest["audio"][number],
+  fallback: string,
+) {
+  return signedR2MediaUrl(mediaId, rendition) ?? await driveProxyMediaUrl(rendition) ?? fallback;
 }
 
 function masterPlaylist(id: string, manifest: HlsManifest) {
@@ -188,8 +236,9 @@ export async function GET(
   }
 
   if (path === "video.m3u8") {
+    const videoUrl = await mediaUrl(id, manifest.video, `${base}/video.mp4`);
     return new Response(
-      rewriteMediaPlaylist(manifest.video.playlist, `${base}/video.mp4`),
+      rewriteMediaPlaylist(manifest.video.playlist, videoUrl),
       {
         headers: {
           "Content-Type": "application/vnd.apple.mpegurl",
@@ -217,8 +266,9 @@ export async function GET(
     }
 
     if (audioMatch[2] === "m3u8") {
+      const audioUrl = await mediaUrl(id, track, `${base}/audio/${index}.mp4`);
       return new Response(
-        rewriteMediaPlaylist(track.playlist, `${base}/audio/${index}.mp4`),
+        rewriteMediaPlaylist(track.playlist, audioUrl),
         {
           headers: {
             "Content-Type": "application/vnd.apple.mpegurl",

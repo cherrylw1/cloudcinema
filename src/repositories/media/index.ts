@@ -29,6 +29,8 @@ export interface HlsRendition {
   driveFileId: string;
   fileSize: number;
   playlist: string;
+  r2Key?: string;
+  r2Etag?: string;
 }
 
 export interface HlsAudioRendition extends HlsRendition {

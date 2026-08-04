@@ -13,6 +13,8 @@
     "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.4.1",
     "@capgo/capacitor-video-player": "^8.1.25",
+    "@aws-sdk/client-s3": "^3.858.0",
+    "@aws-sdk/lib-storage": "^3.858.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
     "class-variance-authority": "^0.7.1",

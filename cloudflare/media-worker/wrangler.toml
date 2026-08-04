@@ -1,0 +1,9 @@
+name = "cloudcinema-media"
+main = "src/index.ts"
+compatibility_date = "2026-08-04"
+
+workers_dev = true
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "cloudcinema-media"
