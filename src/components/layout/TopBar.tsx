@@ -8,7 +8,6 @@ import { navigationItems } from "@/config/navigation";
 import { SupabaseAuthRepository } from "@/repositories/auth/supabase-auth-repository";
 import type { User as AuthUser } from "@/repositories/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Magnetic } from "@/components/ui/Magnetic";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,23 +68,21 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
       className="app-top-bar sticky top-0 z-30 flex h-14 w-full items-center justify-between px-5"
       style={{
         background: "rgba(8, 8, 15, 0.75)",
-        backdropFilter: "blur(40px) saturate(180%)",
-        WebkitBackdropFilter: "blur(40px) saturate(180%)",
+        backdropFilter: "blur(18px) saturate(140%)",
+        WebkitBackdropFilter: "blur(18px) saturate(140%)",
         borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
         boxShadow: "0 1px 0 rgba(255, 255, 255, 0.04)",
       }}
     >
       {/* Left side: Hamburger (mobile) & Title */}
       <div className="flex items-center gap-3.5">
-        <Magnetic>
-          <button
-            onClick={onOpenSidebar}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06] border border-white/[0.09] text-white/70 hover:text-white hover:bg-white/[0.10] transition-all duration-200 md:hidden"
-            aria-label="Open sidebar"
-          >
-            <Menu className="h-4.5 w-4.5" />
-          </button>
-        </Magnetic>
+        <button
+          onClick={onOpenSidebar}
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06] border border-white/[0.09] text-white/70 hover:text-white hover:bg-white/[0.10] transition-all duration-200 md:hidden"
+          aria-label="Open sidebar"
+        >
+          <Menu className="h-4.5 w-4.5" />
+        </button>
         <div>
           <h1 className="text-base font-semibold tracking-[-0.02em] text-white/90 md:text-[17px]">
             {getPageTitle()}
@@ -106,19 +103,17 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
 
         {/* Theme Toggle */}
         {mounted && (
-          <Magnetic>
-            <button
-              onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] border border-white/[0.09] text-white/60 hover:bg-white/[0.10] hover:text-white/90 transition-all duration-200"
-              title={`Switch to ${resolvedTheme === "dark" ? "Light" : "Dark"} Mode`}
-            >
-              {resolvedTheme === "dark" ? (
-                <Sun className="h-4 w-4" />
-              ) : (
-                <Moon className="h-4 w-4" />
-              )}
-            </button>
-          </Magnetic>
+          <button
+            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] border border-white/[0.09] text-white/60 hover:bg-white/[0.10] hover:text-white/90 transition-all duration-200"
+            title={`Switch to ${resolvedTheme === "dark" ? "Light" : "Dark"} Mode`}
+          >
+            {resolvedTheme === "dark" ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
+          </button>
         )}
 
         {/* User Avatar / Dropdown */}

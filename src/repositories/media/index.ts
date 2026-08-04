@@ -103,6 +103,11 @@ export interface Media {
   updatedAt: string;
 }
 
+// List and home cards do not need stream metadata or vector embeddings.
+// Keeping this projection shared prevents large JSON payloads on navigation.
+export const MEDIA_CARD_COLUMNS =
+  "id, drive_file_id, title, series, season, episode, media_type, poster_url, backdrop_url, overview, runtime, file_size, tmdb_id, tmdb_popularity, tmdb_vote_average, tmdb_vote_count, tmdb_genre_ids, tmdb_original_language, mime_type, dv_profile, audio_codec, processing_status, processed_drive_file_id, folder_path, created_at, updated_at" as const;
+
 export interface MediaRepository {
   getMediaList(options?: {
     type?: "movie" | "tv-show" | "anime";

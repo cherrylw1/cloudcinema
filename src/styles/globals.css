@@ -133,7 +133,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    touch-action: manipulation;
+    touch-action: auto;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -142,7 +142,8 @@
     color: var(--foreground);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     letter-spacing: -0.01em;
-    touch-action: manipulation;
+    touch-action: auto;
+    overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -166,6 +167,25 @@
   ::selection {
     background: rgba(229, 9, 20, 0.25);
     color: inherit;
+  }
+}
+
+/* Keep vertical page scrolling independent from horizontal media shelves. */
+@media (max-width: 768px) {
+  html,
+  body {
+    overscroll-behavior-x: none;
+  }
+
+  .fluid-background {
+    display: none;
+  }
+
+  .app-top-bar,
+  .app-bottom-nav {
+    background: rgba(8, 8, 15, 0.98) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 }
 

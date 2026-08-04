@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { MovieDetailActions } from "./MovieDetailActions";
 import { MediaAnalysisPanel } from "@/components/media/MediaAnalysisPanel";
+import { MEDIA_CARD_COLUMNS } from "@/repositories/media";
 
 interface MoviePageProps {
   params: Promise<{ id: string }>;
@@ -28,7 +29,7 @@ export default async function MovieDetailsPage({ params }: MoviePageProps) {
 
   const { data: movie, error } = await supabase
     .from("media_library")
-    .select("*")
+    .select(MEDIA_CARD_COLUMNS)
     .eq("id", id)
     .eq("media_type", "movie")
     .maybeSingle();

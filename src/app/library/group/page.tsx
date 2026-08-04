@@ -1,7 +1,7 @@
 import { PageContainer } from "@/components/layout/PageContainer";
 import { createClient } from "@/clients/supabase/server";
 import { GroupingClient } from "./GroupingClient";
-import type { Media } from "@/repositories/media";
+import { MEDIA_CARD_COLUMNS, type Media } from "@/repositories/media";
 import type { Database } from "@/types/database";
 
 type MediaRow_DB = Database["public"]["Tables"]["media_library"]["Row"];
@@ -41,10 +41,10 @@ export default async function GroupPage() {
   // Fetch all media files to display in the editor
   const { data } = await supabase
     .from("media_library")
-    .select("*")
+    .select(MEDIA_CARD_COLUMNS)
     .order("title", { ascending: true });
 
-  const mediaList = (data || []).map(dbRowToMedia);
+  const mediaList = ((data || []) as unknown as MediaRow_DB[]).map(dbRowToMedia);
 
   return (
     <PageContainer

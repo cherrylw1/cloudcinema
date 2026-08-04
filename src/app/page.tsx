@@ -3,11 +3,15 @@ import { createClient } from "@/clients/supabase/server";
 import { MediaRow } from "@/components/media/MediaRow";
 import { RecommendationsRevalidator } from "@/components/media/RecommendationsRevalidator";
 import { CinematicHero } from "@/components/media/CinematicHero";
-import type { Media } from "@/repositories/media";
+import { MEDIA_CARD_COLUMNS, type Media } from "@/repositories/media";
 import type { Database } from "@/types/database";
 import { TmdbService } from "@/server/services/tmdb-service";
 
 type MediaRow_DB = Database["public"]["Tables"]["media_library"]["Row"];
+
+const HOME_MEDIA_COLUMNS = MEDIA_CARD_COLUMNS;
+const HOME_PROGRESS_SELECT =
+  "playback_position, last_watched, completed, media_library:media_id (id, drive_file_id, title, series, season, episode, media_type, poster_url, backdrop_url, overview, runtime, file_size, tmdb_id, tmdb_popularity, tmdb_vote_average, tmdb_vote_count, tmdb_genre_ids, tmdb_original_language, mime_type, dv_profile, audio_codec, processing_status, processed_drive_file_id, folder_path, created_at, updated_at)" as const;
 
 function dbRowToMedia(row: MediaRow_DB): Media {
   return {
@@ -98,7 +102,7 @@ export default async function Home() {
   if (user) {
     const { data } = await supabase
       .from("user_progress")
-      .select(`playback_position, last_watched, completed, media_library:media_id (*)`)
+      .select(HOME_PROGRESS_SELECT)
       .eq("profile_id", user.id)
       .order("last_watched", { ascending: false })
       .limit(40);
@@ -137,12 +141,12 @@ export default async function Home() {
   const [recentCatalogRes, rankedCatalogRes] = await Promise.all([
     supabase
       .from("media_library")
-      .select("*")
+      .select(HOME_MEDIA_COLUMNS)
       .order("created_at", { ascending: false })
       .limit(320),
     supabase
       .from("media_library")
-      .select("*")
+      .select(HOME_MEDIA_COLUMNS)
       .order("tmdb_vote_average", { ascending: false, nullsFirst: false })
       .limit(320),
   ]);
@@ -188,7 +192,7 @@ export default async function Home() {
         if (allTargetIds.length > 0) {
           const { data: matchedRows } = await supabase
             .from("media_library")
-            .select("*")
+            .select(HOME_MEDIA_COLUMNS)
             .in("id", allTargetIds);
 
           if (matchedRows) {
@@ -241,25 +245,30 @@ export default async function Home() {
       const recIdsSet = new Set<number>();
       const recentHistory = userWatchHistory.slice(0, 5);
 
-      for (const item of recentHistory) {
-        if (!item.tmdbId) continue;
-        const type = item.mediaType === "movie" ? "movie" : "tv";
-        const ids = await tmdb.getRecommendations(item.tmdbId, type);
-        for (const id of ids) {
-          recIdsSet.add(id);
-        }
+      const recommendationBatches = await Promise.all(
+        recentHistory
+          .filter((item) => item.tmdbId)
+          .map((item) => {
+            const type = item.mediaType === "movie" ? "movie" : "tv";
+            return tmdb.getRecommendations(item.tmdbId as number, type);
+          }),
+      );
+      for (const ids of recommendationBatches) {
+        for (const id of ids) recIdsSet.add(id);
       }
 
       const recIds = Array.from(recIdsSet);
       if (recIds.length > 0) {
         const { data: recMediaRows } = await supabase
           .from("media_library")
-          .select("*")
+          .select(HOME_MEDIA_COLUMNS)
           .in("tmdb_id", recIds.slice(0, 60));
 
         if (recMediaRows) {
           tmdbRecommendations = deduplicateCatalog(
-            recMediaRows.map(dbRowToMedia).filter((media) => media.mediaType !== "anime"),
+            recMediaRows
+              .map((row) => dbRowToMedia(row as MediaRow_DB))
+              .filter((media) => media.mediaType !== "anime"),
           ).slice(0, 20);
           showTmdbRecommendations = tmdbRecommendations.length > 0;
         }

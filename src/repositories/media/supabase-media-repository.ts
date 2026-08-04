@@ -1,13 +1,14 @@
 import { createClient } from "@/clients/supabase/server";
-import type {
-  Media,
-  MediaRepository,
-  AudioStream,
-  SubtitleStream,
-  AudioVariant,
-  SubtitleTrack,
-  HlsManifest,
-  StreamMetadata,
+import {
+  MEDIA_CARD_COLUMNS,
+  type Media,
+  type MediaRepository,
+  type AudioStream,
+  type SubtitleStream,
+  type AudioVariant,
+  type SubtitleTrack,
+  type HlsManifest,
+  type StreamMetadata,
 } from "./index";
 import type { Database } from "@/types/database";
 
@@ -38,7 +39,7 @@ export class SupabaseMediaRepository implements MediaRepository {
 
     let query = supabase
       .from("media_library")
-      .select("*");
+      .select(MEDIA_CARD_COLUMNS);
 
     if (options?.type) {
       query = query.eq("media_type", options.type);
@@ -71,7 +72,8 @@ export class SupabaseMediaRepository implements MediaRepository {
       throw error;
     }
 
-    return (data || []).map((row: MediaRow) => {
+    const mediaRows = (data || []) as unknown as MediaRow[];
+    return mediaRows.map((row) => {
       const streams = streamMetadata(row.audio_streams);
       return {
         id: row.id,

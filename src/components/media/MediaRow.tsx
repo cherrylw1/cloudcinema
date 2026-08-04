@@ -62,8 +62,14 @@ export function MediaRow({ title, items, variant = "portrait", description }: Me
         {/* Scrollable row */}
         <div
           ref={rowRef}
-          className="flex snap-x gap-3 overflow-x-auto overscroll-x-contain pb-2 scrollbar-none touch-pan-x sm:gap-4"
-          style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }}
+          className="flex gap-3 overflow-x-auto overscroll-x-contain pb-2 scrollbar-none touch-auto sm:gap-4"
+          style={{
+            scrollSnapType: "x proximity",
+            overscrollBehaviorX: "contain",
+            overscrollBehaviorY: "auto",
+            touchAction: "pan-x pan-y",
+            WebkitOverflowScrolling: "touch",
+          }}
         >
           {items.map((media) => (
             <div

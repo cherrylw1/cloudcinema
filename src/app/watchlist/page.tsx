@@ -5,6 +5,9 @@ import type { Media } from "@/repositories/media";
 import type { Database } from "@/types/database";
 import { redirect } from "next/navigation";
 
+const WATCHLIST_SELECT =
+  "id, user_id, media_id, created_at, media_library:media_id (id, drive_file_id, title, series, season, episode, media_type, poster_url, backdrop_url, overview, runtime, file_size, tmdb_id, tmdb_popularity, tmdb_vote_average, tmdb_vote_count, tmdb_genre_ids, tmdb_original_language, mime_type, dv_profile, audio_codec, processing_status, processed_drive_file_id, folder_path, created_at, updated_at)" as const;
+
 type MediaRow_DB = Database["public"]["Tables"]["media_library"]["Row"];
 
 function dbRowToMedia(row: MediaRow_DB): Media {
@@ -46,13 +49,7 @@ export default async function WatchlistPage() {
 
   const { data, error } = await supabase
     .from("watchlist")
-    .select(`
-      id,
-      user_id,
-      media_id,
-      created_at,
-      media_library:media_id (*)
-    `)
+    .select(WATCHLIST_SELECT)
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 

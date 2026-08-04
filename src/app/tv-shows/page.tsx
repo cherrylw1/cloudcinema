@@ -1,7 +1,7 @@
 import { PageContainer } from "@/components/layout/PageContainer";
 import { createClient } from "@/clients/supabase/server";
 import { SeriesCard } from "@/components/media/SeriesCard";
-import type { Media } from "@/repositories/media";
+import { MEDIA_CARD_COLUMNS, type Media } from "@/repositories/media";
 import type { Database } from "@/types/database";
 
 type MediaRow_DB = Database["public"]["Tables"]["media_library"]["Row"];
@@ -39,11 +39,11 @@ export default async function TVShowsPage() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("media_library")
-    .select("*")
+    .select(MEDIA_CARD_COLUMNS)
     .eq("media_type", "tv-show")
     .order("series", { ascending: true });
 
-  const allEpisodes = (data || []).map(dbRowToMedia);
+  const allEpisodes = ((data || []) as unknown as MediaRow_DB[]).map(dbRowToMedia);
 
   // Deduplicate: one card per series
   const seen = new Set<string>();

@@ -5,6 +5,39 @@ import { Play, ChevronLeft } from "lucide-react";
 import { SeriesDetailClient } from "./SeriesDetailClient";
 import { EpisodeRow } from "./EpisodeRow";
 import { MediaAnalysisPanel } from "@/components/media/MediaAnalysisPanel";
+import { MEDIA_CARD_COLUMNS, type Media } from "@/repositories/media";
+import type { Database } from "@/types/database";
+
+type MediaRow_DB = Database["public"]["Tables"]["media_library"]["Row"];
+
+function dbRowToMedia(row: MediaRow_DB): Media {
+  return {
+    id: row.id,
+    driveFileId: row.drive_file_id,
+    title: row.title,
+    series: row.series,
+    season: row.season,
+    episode: row.episode,
+    mediaType: row.media_type,
+    posterUrl: row.poster_url,
+    backdropUrl: row.backdrop_url,
+    overview: row.overview,
+    runtime: row.runtime,
+    fileSize: row.file_size,
+    tmdbId: row.tmdb_id,
+    mimeType: row.mime_type,
+    dvProfile: row.dv_profile,
+    audioCodec: row.audio_codec,
+    audioStreams: null,
+    subtitleStreams: null,
+    processingStatus: row.processing_status,
+    audioVariants: null,
+    subtitleTracks: null,
+    processedDriveFileId: row.processed_drive_file_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 interface SeriesPageProps {
   params: Promise<{ seriesName: string }>;
@@ -29,14 +62,16 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
 
   const supabase = await createClient();
 
-  const { data: episodes, error } = await supabase
+  const { data: rawEpisodes, error } = await supabase
     .from("media_library")
-    .select("*")
+    .select(MEDIA_CARD_COLUMNS)
     .or(`series.eq."${decoded}",title.eq."${decoded}"`)
     .order("season", { ascending: true })
     .order("episode", { ascending: true });
 
-  if (error || !episodes || episodes.length === 0) notFound();
+  if (error || !rawEpisodes || rawEpisodes.length === 0) notFound();
+
+  const episodes = rawEpisodes as unknown as MediaRow_DB[];
 
   const showMeta = episodes[0];
   const backdropUrl = showMeta.backdrop_url;
@@ -254,7 +289,7 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
                 return (
                   <EpisodeRow
                     key={ep.id}
-                    ep={ep}
+                    ep={dbRowToMedia(ep)}
                     progressPct={progressPct}
                     completed={prog?.completed ?? false}
                     runtimeStr={formatRuntime(runtime)}

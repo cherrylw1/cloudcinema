@@ -30,9 +30,9 @@ export function MediaCard({ media }: MediaCardProps) {
   const href = media.mediaType === "movie" ? `/movies/${media.id}` : `/watch/${media.id}`;
 
   return (
-    <Link href={href} prefetch onClick={handleClick} className="block group relative active:scale-[0.98] transition-all duration-100 ease-out">
+    <Link href={href} prefetch onClick={handleClick} className="block group relative active:scale-[0.98] transition-transform duration-100 ease-out">
       <div
-        className="relative overflow-hidden flex flex-col justify-between aspect-video rounded-2xl transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] cursor-pointer h-full group-hover:scale-[1.02]"
+        className="relative overflow-hidden flex flex-col justify-between aspect-video rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] cursor-pointer h-full md:group-hover:scale-[1.02]"
         style={{
           background: isSelected
             ? "rgba(229,9,20,0.08)"
@@ -49,7 +49,7 @@ export function MediaCard({ media }: MediaCardProps) {
         <div
           onClick={handleCheckboxClick}
           className={`touch-selection-control absolute top-2.5 left-2.5 z-30 transition-all duration-200 ${
-            isSelectionMode ? "opacity-100 scale-100" : "opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100"
+            isSelectionMode ? "opacity-100 scale-100" : "opacity-0 scale-90 md:group-hover:opacity-100 md:group-hover:scale-100"
           }`}
         >
           <div
@@ -77,7 +77,7 @@ export function MediaCard({ media }: MediaCardProps) {
               src={media.posterUrl}
               alt={media.title}
               decoding="async"
-              className="absolute inset-0 w-full h-full object-cover rounded-2xl transition-transform duration-500 group-hover:scale-[1.05]"
+              className="absolute inset-0 w-full h-full object-cover rounded-2xl transition-transform duration-500 md:group-hover:scale-[1.05]"
               loading="lazy"
             />
             <div
@@ -93,11 +93,11 @@ export function MediaCard({ media }: MediaCardProps) {
         {/* Play overlay on hover */}
         {!isSelectionMode && (
           <div
-            className="touch-play-overlay absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-250 flex items-center justify-center rounded-2xl z-20"
+            className="touch-play-overlay absolute inset-0 opacity-0 md:group-hover:opacity-100 transition-opacity duration-250 flex items-center justify-center rounded-2xl z-20"
             style={{ background: "rgba(0,0,0,0.35)" }}
           >
             <div
-              className="h-10 w-10 rounded-full flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform duration-300 shadow-xl"
+                className="h-10 w-10 rounded-full flex items-center justify-center transform scale-75 md:group-hover:scale-100 transition-transform duration-300 shadow-xl"
               style={{
                 background: "rgba(255,255,255,0.92)",
                 boxShadow: "0 4px 20px rgba(0,0,0,0.5)",

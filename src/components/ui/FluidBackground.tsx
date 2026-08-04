@@ -2,7 +2,7 @@ export function FluidBackground() {
   return (
     <div className="fluid-background fixed inset-0 z-0 overflow-hidden pointer-events-none select-none opacity-45 dark:opacity-30 transition-opacity duration-1000">
       {/* Morphing color blobs container */}
-      <div className="absolute inset-0 bg-transparent blur-[120px] saturate-[180%] transform-gpu">
+      <div className="absolute inset-0 bg-transparent blur-[80px] saturate-[140%] transform-gpu">
         {/* Blob 1: Deep Royal Indigo */}
         <div 
           className="absolute rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-900 opacity-60 mix-blend-screen"

@@ -135,8 +135,7 @@ export function AppShell({ children }: AppShellProps) {
 
               {/* Content Container */}
               <main 
-                key={pathname}
-                className="flex-1 p-6 pb-24 md:p-8 md:pb-8 max-w-7xl w-full mx-auto animate-fade-in"
+                className="flex-1 p-6 pb-24 md:p-8 md:pb-8 max-w-7xl w-full mx-auto"
               >
                 {children}
               </main>
