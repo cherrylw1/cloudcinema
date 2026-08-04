@@ -45,21 +45,33 @@ export class MetadataSyncService {
       remaining: 0,
     };
 
-    let query = this.adminClient
+    const baseQuery = () => this.adminClient
       .from("media_library")
       .select("id, title, series, media_type")
-      .in("media_type", ["movie", "tv-show", "anime"])
-      .limit(batchSize);
+      .in("media_type", ["movie", "tv-show", "anime"]);
 
     // -1 is the existing sentinel for a previous no-match. Retry it when the
     // user explicitly starts a fresh metadata run, but do not count it as an
     // endless pending queue for the current run.
-    query = options?.retryUnmatched === false
-      ? query.is("tmdb_id", null)
-      : query.or("tmdb_id.is.null,tmdb_id.eq.-1");
+    const missingQuery = options?.retryUnmatched === false
+      ? baseQuery().is("tmdb_id", null).limit(batchSize)
+      : baseQuery().or("tmdb_id.is.null,tmdb_id.eq.-1").limit(batchSize);
 
-    const { data: rawBatch, error } = await query;
-    if (error) throw error;
+    const { data: missingRows, error: missingError } = await missingQuery;
+    if (missingError) throw missingError;
+
+    let rawBatch = missingRows || [];
+    if (rawBatch.length < batchSize) {
+      const { data: enrichmentRows, error: enrichmentError } = await baseQuery()
+        .not("tmdb_id", "is", null)
+        .neq("tmdb_id", -1)
+        .is("tmdb_popularity", null)
+        .limit(batchSize - rawBatch.length);
+
+      if (!enrichmentError) {
+        rawBatch = [...rawBatch, ...(enrichmentRows || [])];
+      }
+    }
 
     const batch = (rawBatch || []) as MetadataRow[];
     result.processed = batch.length;
@@ -84,14 +96,27 @@ export class MetadataSyncService {
       );
     }
 
-    const { count: remaining, error: remainingError } = await this.adminClient
+    const { count: missingCount, error: missingCountError } = await this.adminClient
       .from("media_library")
       .select("id", { count: "exact", head: true })
       .in("media_type", ["movie", "tv-show", "anime"])
       .is("tmdb_id", null);
 
-    if (remainingError) throw remainingError;
-    result.remaining = remaining ?? 0;
+    if (missingCountError) throw missingCountError;
+
+    const { count: enrichmentCount, error: enrichmentCountError } = await this.adminClient
+      .from("media_library")
+      .select("id", { count: "exact", head: true })
+      .in("media_type", ["movie", "tv-show", "anime"])
+      .not("tmdb_id", "is", null)
+      .neq("tmdb_id", -1)
+      .is("tmdb_popularity", null);
+
+    if (enrichmentCountError) {
+      result.remaining = missingCount ?? 0;
+    } else {
+      result.remaining = (missingCount ?? 0) + (enrichmentCount ?? 0);
+    }
 
     console.log(
       `[Metadata Sync] Complete. Processed: ${result.processed}, ` +
