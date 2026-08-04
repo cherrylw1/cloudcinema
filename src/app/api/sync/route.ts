@@ -25,8 +25,9 @@ export async function POST(req: Request) {
     }
 
     const syncService = new DriveSyncService();
-    // Manual browser sync reconciles Drive deletions as well as additions.
-    const result = await syncService.sync({ full: true, pruneMissing: true });
+    // Normal browser sync uses the persisted Drive change token. The service
+    // automatically performs a full inventory only when no token exists.
+    const result = await syncService.sync({ pruneMissing: true });
 
     // Trigger background embedding generator for any newly synced files automatically (non-blocking)
     const baseUrl = new URL(req.url).origin;

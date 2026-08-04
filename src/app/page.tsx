@@ -24,6 +24,11 @@ function dbRowToMedia(row: MediaRow_DB): Media {
     runtime: row.runtime,
     fileSize: row.file_size,
     tmdbId: row.tmdb_id,
+    tmdbPopularity: row.tmdb_popularity,
+    tmdbVoteAverage: row.tmdb_vote_average,
+    tmdbVoteCount: row.tmdb_vote_count,
+    tmdbGenreIds: Array.isArray(row.tmdb_genre_ids) ? row.tmdb_genre_ids as number[] : null,
+    tmdbOriginalLanguage: row.tmdb_original_language,
     mimeType: row.mime_type,
     dvProfile: row.dv_profile,
     audioCodec: row.audio_codec,
@@ -38,16 +43,30 @@ function dbRowToMedia(row: MediaRow_DB): Media {
   };
 }
 
-/** Deduplicate TV/Anime by series name, keeping only one representative per series */
-function deduplicateSeries(items: Media[]): Media[] {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    if (item.mediaType === "movie") return true;
-    const key = item.series || item.title;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+function canonicalKey(item: Pick<Media, "mediaType" | "tmdbId" | "series" | "title">) {
+  const type = item.mediaType === "movie" ? "movie" : "tv";
+  if (item.tmdbId && item.tmdbId > 0) return `${type}:tmdb:${item.tmdbId}`;
+  const title = type === "movie" ? item.title : item.series || item.title;
+  return `${type}:title:${title.trim().toLowerCase().replace(/\s+/g, " ")}`;
+}
+
+function catalogScore(item: Media) {
+  const quality = Math.max(0, Math.min(1, (item.tmdbVoteAverage || 0) / 10));
+  const popularity = Math.max(0, Math.min(1, Math.log10(1 + (item.tmdbPopularity || 0)) / 3));
+  const votes = Math.max(0, Math.min(1, Math.log10(1 + (item.tmdbVoteCount || 0)) / 6));
+  return quality * 0.55 + popularity * 0.25 + votes * 0.2;
+}
+
+function deduplicateCatalog(items: Media[]) {
+  const representatives = new Map<string, Media>();
+  for (const item of items) {
+    const key = canonicalKey(item);
+    const current = representatives.get(key);
+    if (!current || (!current.posterUrl && item.posterUrl) || catalogScore(item) > catalogScore(current)) {
+      representatives.set(key, item);
+    }
+  }
+  return Array.from(representatives.values());
 }
 
 interface CuratedMarathon {
@@ -55,6 +74,18 @@ interface CuratedMarathon {
   reason: string;
   items: Media[];
 }
+
+const HOME_GENRES: Record<number, string> = {
+  18: "Drama & Human Stories",
+  27: "Horror After Dark",
+  28: "Action & Adrenaline",
+  35: "Comedy & Light Escapes",
+  53: "Thrillers & Tension",
+  80: "Crime & Consequences",
+  878: "Science Fiction & Wonder",
+  9648: "Mystery & Intrigue",
+  10749: "Romance & Connection",
+};
 
 export default async function Home() {
   const supabase = await createClient();
@@ -82,6 +113,7 @@ export default async function Home() {
           return m ? dbRowToMedia(m as MediaRow_DB) : null;
         })
         .filter((m): m is Media => m !== null)
+        .filter((item, index, items) => items.findIndex((candidate) => canonicalKey(candidate) === canonicalKey(item)) === index)
         .slice(0, 20);
 
       // Compile watch history TMDB IDs for recommendation engine
@@ -89,7 +121,7 @@ export default async function Home() {
       for (const item of data) {
         const mediaArr = item.media_library;
         const m = Array.isArray(mediaArr) ? mediaArr[0] : mediaArr;
-        if (m && (m as MediaRow_DB).tmdb_id) {
+        if (m && (m as MediaRow_DB).tmdb_id && (m as MediaRow_DB).media_type !== "anime") {
           historyList.push({
             tmdbId: (m as MediaRow_DB).tmdb_id,
             mediaType: (m as MediaRow_DB).media_type,
@@ -100,17 +132,31 @@ export default async function Home() {
     }
   }
 
-  // Fetch all library catalog items for mapping/fallback
-  const { data: catalogData } = await supabase
-    .from("media_library")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(300);
-  const catalogAll = (catalogData || []).map(dbRowToMedia);
-  const movies = catalogAll.filter((m) => m.mediaType === "movie").slice(0, 20);
-  const tvShows = deduplicateSeries(catalogAll.filter((m) => m.mediaType === "tv-show")).slice(0, 20);
-  const anime = deduplicateSeries(catalogAll.filter((m) => m.mediaType === "anime")).slice(0, 20);
-  const recentDeduped = deduplicateSeries(catalogAll).slice(0, 30);
+  // Merge recent and highly rated rows so the Home page can rank the library
+  // without treating the newest database records as the best titles.
+  const [recentCatalogRes, rankedCatalogRes] = await Promise.all([
+    supabase
+      .from("media_library")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(320),
+    supabase
+      .from("media_library")
+      .select("*")
+      .order("tmdb_vote_average", { ascending: false, nullsFirst: false })
+      .limit(320),
+  ]);
+  const catalogMap = new Map<string, Media>();
+  for (const row of [...(recentCatalogRes.data || []), ...(rankedCatalogRes.data || [])]) {
+    catalogMap.set(row.id, dbRowToMedia(row as MediaRow_DB));
+  }
+  const catalogAll = Array.from(catalogMap.values());
+  const allMovies = deduplicateCatalog(catalogAll.filter((m) => m.mediaType === "movie"));
+  const allTvShows = deduplicateCatalog(catalogAll.filter((m) => m.mediaType === "tv-show"));
+  const anime = deduplicateCatalog(catalogAll.filter((m) => m.mediaType === "anime"));
+  const movies = [...allMovies].sort((a, b) => catalogScore(b) - catalogScore(a)).slice(0, 20);
+  const tvShows = [...allTvShows].sort((a, b) => catalogScore(b) - catalogScore(a)).slice(0, 20);
+  const recentDeduped = deduplicateCatalog([...catalogAll].sort((a, b) => b.createdAt.localeCompare(a.createdAt))).slice(0, 30);
 
   // ── Load Cached Recommendations or Fallback ────────────────────────────────
   let cacheUpdatedAt: string | null = null;
@@ -126,10 +172,10 @@ export default async function Home() {
       .single();
 
     if (profile?.recommendations) {
-      const cache = profile.recommendations as { updatedAt?: string; data?: { recommendations?: Array<{ id: string; reason?: string }>; marathons?: Array<{ title: string; reason?: string; itemIds?: string[] }> } };
-      cacheUpdatedAt = cache.updatedAt || null;
+      const cache = profile.recommendations as { version?: number; updatedAt?: string; data?: { recommendations?: Array<{ id: string; reason?: string }>; marathons?: Array<{ title: string; reason?: string; itemIds?: string[] }> } };
+      cacheUpdatedAt = cache.version === 2 ? cache.updatedAt || null : null;
 
-      if (cache.data) {
+      if (cache.version === 2 && cache.data) {
         useLlmRecommendations = true;
 
         // Compile all target media UUIDs to run a targeted lookup query
@@ -154,7 +200,7 @@ export default async function Home() {
 
         // Map recommendations items
         if (cache.data.recommendations) {
-          llmRecommendations = cache.data.recommendations
+          llmRecommendations = deduplicateCatalog(cache.data.recommendations
             .map((rec): Media | null => {
               const media = libraryMap.get(rec.id);
               if (media) {
@@ -162,16 +208,18 @@ export default async function Home() {
               }
               return null;
             })
-            .filter((m): m is Media => m != null);
+            .filter((m): m is Media => m != null)
+            .filter((m) => m.mediaType !== "anime"));
         }
 
         // Map marathons categories
         if (cache.data.marathons) {
           llmMarathons = cache.data.marathons
             .map((mar) => {
-              const items = (mar.itemIds || [])
+              const items = deduplicateCatalog((mar.itemIds || [])
                 .map((id) => libraryMap.get(id))
-                .filter((m): m is Media => m != null);
+                .filter((m): m is Media => m != null)
+                .filter((m) => m.mediaType !== "anime"));
               if (mar.title && items.length > 0) {
                 return { title: mar.title, reason: mar.reason || "", items };
               }
@@ -210,7 +258,9 @@ export default async function Home() {
           .in("tmdb_id", recIds.slice(0, 60));
 
         if (recMediaRows) {
-          tmdbRecommendations = deduplicateSeries(recMediaRows.map(dbRowToMedia)).slice(0, 20);
+          tmdbRecommendations = deduplicateCatalog(
+            recMediaRows.map(dbRowToMedia).filter((media) => media.mediaType !== "anime"),
+          ).slice(0, 20);
           showTmdbRecommendations = tmdbRecommendations.length > 0;
         }
       }
@@ -222,9 +272,8 @@ export default async function Home() {
   // ── Cold Start Fallback Curation (Random Shuffled picks) ────────────────────
   let curatedPicks: Media[] = [];
   if (!useLlmRecommendations && !showTmdbRecommendations) {
-    curatedPicks = [...movies, ...tvShows, ...anime]
+    curatedPicks = [...movies, ...tvShows]
       .filter((m) => m.posterUrl)
-      .sort(() => 0.5 - Math.random())
       .slice(0, 20);
   }
 
@@ -233,9 +282,20 @@ export default async function Home() {
     ...llmRecommendations,
     ...(llmMarathons[0]?.items || []),
     ...tmdbRecommendations,
-    ...catalogAll,
+    ...catalogAll.filter((item) => item.mediaType !== "anime"),
   ].filter((m): m is Media => m != null);
   const heroItem = heroSourceList.find((m) => m.backdropUrl && m.overview) || heroSourceList[0];
+
+  const genreRows = Object.entries(HOME_GENRES)
+    .map(([genreId, title]) => ({
+      title,
+      items: [...allMovies, ...allTvShows]
+        .filter((item) => item.tmdbGenreIds?.includes(Number(genreId)))
+        .sort((a, b) => catalogScore(b) - catalogScore(a))
+        .slice(0, 12),
+    }))
+    .filter((row) => row.items.length >= 4)
+    .slice(0, 5);
 
   const heroTitle = heroItem
     ? (heroItem.mediaType !== "movie" && heroItem.series) ? heroItem.series : heroItem.title
@@ -315,16 +375,26 @@ export default async function Home() {
           />
         )}
 
+        {/* Genre shelves */}
+        {genreRows.map((row) => (
+          <MediaRow
+            key={row.title}
+            title={row.title}
+            items={row.items}
+            variant="portrait"
+          />
+        ))}
+
         {/* TV Shows */}
         {tvShows.length > 0 && (
           <MediaRow
-            title="Binge-worthy TV Shows"
+            title="Top TV Shows"
             items={tvShows}
             variant="portrait"
           />
         )}
 
-        {/* Movies */}
+        {/* Top Movies */}
         {movies.length > 0 && (
           <MediaRow
             title="Top Movies"
@@ -333,10 +403,10 @@ export default async function Home() {
           />
         )}
 
-        {/* Anime */}
+        {/* Anime library, kept separate from recommendation rows */}
         {anime.length > 0 && (
           <MediaRow
-            title="Anime"
+            title="Anime Library"
             items={anime}
             variant="portrait"
           />

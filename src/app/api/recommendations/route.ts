@@ -3,188 +3,194 @@ import { createClient } from "@/clients/supabase/server";
 import { createAdminClient } from "@/clients/supabase/admin";
 import type { Database } from "@/types/database";
 
-type MediaRow_DB = Database["public"]["Tables"]["media_library"]["Row"];
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+type MediaRow = Database["public"]["Tables"]["media_library"]["Row"];
+type MediaType = "movie" | "tv-show";
+
+interface SimilarMatch {
+  id: string;
+  similarity: number;
+}
+
+interface RankedCandidate {
+  row: MediaRow;
+  key: string;
+  score: number;
+  similarity: number;
+}
+
+const GENRE_SHELVES: Record<number, string> = {
+  12: "Adventure & Escape",
+  14: "Fantasy Worlds",
+  18: "Drama & Human Stories",
+  27: "Horror After Dark",
+  28: "Action & Adrenaline",
+  35: "Comedy & Light Escapes",
+  36: "History Revisited",
+  37: "Western Horizons",
+  53: "Thrillers & Tension",
+  80: "Crime & Consequences",
+  878: "Science Fiction & Wonder",
+  9648: "Mystery & Intrigue",
+  10749: "Romance & Connection",
+  10751: "Family Viewing",
+  10752: "War Stories",
+  10759: "Action TV",
+  10765: "Fantasy TV",
+  10768: "History TV",
+  10766: "Serial Drama",
+  10767: "Talk & Reality",
+};
+
+function canonicalKey(row: Pick<MediaRow, "media_type" | "tmdb_id" | "series" | "title">) {
+  const type: MediaType = row.media_type === "movie" ? "movie" : "tv-show";
+  if (row.tmdb_id && row.tmdb_id > 0) return `${type}:tmdb:${row.tmdb_id}`;
+  const title = type === "movie" ? row.title : row.series || row.title;
+  return `${type}:title:${title.trim().toLowerCase().replace(/\s+/g, " ")}`;
+}
+
+function displayTitle(row: MediaRow) {
+  return row.media_type === "movie" ? row.title : row.series || row.title;
+}
+
+function asGenreIds(value: Database["public"]["Tables"]["media_library"]["Row"]["tmdb_genre_ids"]) {
+  return Array.isArray(value) ? value.filter((id): id is number => typeof id === "number") : [];
+}
+
+function rankScore(row: MediaRow, similarity: number) {
+  const quality = Math.max(0, Math.min(1, (row.tmdb_vote_average || 0) / 10));
+  const popularity = Math.max(0, Math.min(1, Math.log10(1 + (row.tmdb_popularity || 0)) / 3));
+  return similarity * 0.65 + quality * 0.2 + popularity * 0.15;
+}
+
+function chooseRepresentative(rows: MediaRow[], similarityById: Map<string, number>) {
+  return [...rows].sort((a, b) => {
+    const aSimilarity = similarityById.get(a.id) || 0;
+    const bSimilarity = similarityById.get(b.id) || 0;
+    const aPoster = a.poster_url ? 1 : 0;
+    const bPoster = b.poster_url ? 1 : 0;
+    return bPoster - aPoster || bSimilarity - aSimilarity || (a.episode || 0) - (b.episode || 0);
+  })[0];
+}
 
 export async function POST() {
   try {
     const supabase = await createClient();
-    const adminClient = createAdminClient(); // Bypasses RLS to write cache to profiles
+    const adminClient = createAdminClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const openrouterKey = process.env.OPENROUTER_API_KEY;
-    if (!openrouterKey) {
-      return NextResponse.json({ error: "OpenRouter API Key is missing on the server" }, { status: 400 });
-    }
-
-    // 1. Fetch user watch history (limit 8 to get recently active items)
     const { data: watchHistory } = await supabase
       .from("user_progress")
-      .select(`playback_position, completed, last_watched, media_library:media_id (*)`)
+      .select("playback_position, completed, last_watched, media_library:media_id (*)")
       .eq("profile_id", user.id)
       .order("last_watched", { ascending: false })
-      .limit(8);
+      .limit(12);
 
-    // Filter items that have embeddings in watch history
-    const historyItems = (watchHistory || [])
-      .map((item) => {
-        const m = Array.isArray(item.media_library) ? item.media_library[0] : item.media_library;
-        return m ? (m as MediaRow_DB) : null;
-      })
-      .filter((m): m is MediaRow_DB => m !== null);
+    const historyRows = (watchHistory || [])
+      .map((item) => Array.isArray(item.media_library) ? item.media_library[0] : item.media_library)
+      .filter((row): row is MediaRow => Boolean(row) && row.media_type !== "anime");
+    const watchedKeys = new Set(historyRows.map(canonicalKey));
+    const historyWithEmbeddings = historyRows.filter((row) => row.embedding !== null).slice(0, 8);
 
-    const historyWithEmbeddings = historyItems.filter((item) => item.embedding !== null);
-
-    // 2. Fetch semantic similarity candidates for recently watched items
-    const candidatesMap = new Map<string, any>();
-
-    // For each recently watched item, retrieve 8 most similar items from the database
-    for (const watched of historyWithEmbeddings) {
-      const { data: matches } = await supabase.rpc("match_media", {
+    const similarityById = new Map<string, number>();
+    const similarityResponses = await Promise.all(historyWithEmbeddings.map(async (watched) => {
+      const { data } = await supabase.rpc("match_media", {
         query_embedding: watched.embedding,
-        match_threshold: 0.15,
-        match_count: 8,
+        match_threshold: 0.28,
+        match_count: 20,
       });
-
-      if (matches) {
-        for (const m of matches) {
-          // Don't recommend the item itself
-          if (m.id === watched.id) continue;
-          candidatesMap.set(m.id, {
-            id: m.id,
-            title: m.series || m.title,
-            type: m.media_type,
-            overview: m.overview || "",
-            similarity: m.similarity,
-          });
-        }
-      }
-    }
-
-    // 3. Supplement with general catalog items (trending/recently added) to fill list
-    const { data: recentAdditions } = await supabase
-      .from("media_library")
-      .select("id, title, series, media_type, overview")
-      .order("created_at", { ascending: false })
-      .limit(40);
-
-    if (recentAdditions) {
-      for (const item of recentAdditions) {
-        if (candidatesMap.size >= 80) break;
-        if (!candidatesMap.has(item.id)) {
-          candidatesMap.set(item.id, {
-            id: item.id,
-            title: item.series || item.title,
-            type: item.media_type,
-            overview: item.overview || "",
-            similarity: 0.0,
-          });
-        }
-      }
-    }
-
-    const candidatesList = Array.from(candidatesMap.values());
-
-    if (candidatesList.length === 0) {
-      return NextResponse.json({ recommendations: [], marathons: [] });
-    }
-
-    // 4. Format watch history context for the LLM
-    const formattedHistory = historyItems.map((item) => ({
-      title: item.series || item.title,
-      type: item.media_type,
+      return (data || []) as SimilarMatch[];
     }));
 
-    // 5. Prompt Gemini 2.5 Flash Lite to curate custom personalized rows & marathons
-    const systemPrompt = `You are a premium cinema curation assistant.
-Below is the user's recently watched history and the list of candidate movies/series retrieved from their library database.
-
-Your task is to compile:
-1. "recommendations": A list of up to 10 recommended items from the provided candidates list. Include a short, customized "reason" for each based on their history (e.g. "Because you recently watched Breaking Bad, explore this tense crime drama").
-2. "marathons": 3 to 4 premium, themed Netflix-style movie marathons or double-features. Each marathon must have a "title" (e.g., "Cosmic Anomalies & Realities"), a "reason" explaining the thematic connection, and "itemIds" (an array of 2 to 4 item IDs from the provided candidate list that fit this theme).
-
-Rules:
-- You MUST only select item IDs that exist in the provided candidates list. Never invent or recommend titles not in the list.
-- Make category titles and reasons sound extremely cinematic, personalized, and customized.
-- Respond with a raw JSON object matching the JSON Schema below:
-{
-  "recommendations": [
-    {
-      "id": "uuid-string",
-      "title": "Movie or Series Title",
-      "reason": "Personalized reason based on watch history"
-    }
-  ],
-  "marathons": [
-    {
-      "title": "Thematic Title",
-      "reason": "tagline explaining the collection",
-      "itemIds": ["uuid-1", "uuid-2"]
-    }
-  ]
-}`;
-
-    const userPrompt = `Candidate Movies & Series list:
-${JSON.stringify(candidatesList, null, 2)}
-
-User Watch History:
-${JSON.stringify(formattedHistory, null, 2)}`;
-
-    // Call OpenRouter API using google/gemini-2.5-flash-lite
-    const openrouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${openrouterKey}`,
-        "HTTP-Referer": "https://cloudcinema.vercel.app",
-        "X-Title": "CloudCinema",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.65,
-      }),
-    });
-
-    if (!openrouterRes.ok) {
-      const errorText = await openrouterRes.text();
-      console.error("[Recommendations LLM] OpenRouter call failed:", errorText);
-      return NextResponse.json({ error: "Curation API call failed" }, { status: 500 });
+    for (const matches of similarityResponses) {
+      for (const match of matches) {
+        if (match.id && typeof match.similarity === "number") {
+          similarityById.set(match.id, Math.max(similarityById.get(match.id) || 0, match.similarity));
+        }
+      }
     }
 
-    const completion = await openrouterRes.json();
-    const responseText = completion.choices?.[0]?.message?.content;
-    if (!responseText) {
-      throw new Error("Empty response from OpenRouter");
+    const similarityIds = Array.from(similarityById.keys());
+    const { data: similarityRows } = similarityIds.length > 0
+      ? await supabase.from("media_library").select("*").in("id", similarityIds)
+      : { data: [] as MediaRow[] };
+    const similarityRowList = ((similarityRows || []) as MediaRow[])
+      .filter((row) => row.media_type !== "anime" && row.poster_url);
+
+    const { data: generalRows } = await supabase
+      .from("media_library")
+      .select("*")
+      .in("media_type", ["movie", "tv-show"])
+      .not("tmdb_id", "is", null)
+      .not("poster_url", "is", null)
+      .order("tmdb_vote_average", { ascending: false, nullsFirst: false })
+      .limit(240);
+
+    const allCandidates = [...similarityRowList, ...((generalRows || []) as MediaRow[])];
+    const candidatesByKey = new Map<string, MediaRow[]>();
+    for (const row of allCandidates) {
+      const key = canonicalKey(row);
+      if (watchedKeys.has(key)) continue;
+      const rows = candidatesByKey.get(key) || [];
+      rows.push(row);
+      candidatesByKey.set(key, rows);
     }
 
-    const recommendationsData = JSON.parse(responseText);
+    const rankedCandidates: RankedCandidate[] = Array.from(candidatesByKey.entries())
+      .map(([key, rows]) => {
+        const row = chooseRepresentative(rows, similarityById);
+        const similarity = Math.max(...rows.map((candidate) => similarityById.get(candidate.id) || 0));
+        return { row, key, similarity, score: rankScore(row, similarity) };
+      })
+      .sort((a, b) => b.score - a.score);
 
-    // Save recommendations and timestamp inside profiles recommendations column (bypassing RLS with admin client)
+    const recommendations = rankedCandidates.slice(0, 12).map(({ row, similarity }) => ({
+      id: row.id,
+      title: displayTitle(row),
+      reason: similarity > 0.35
+        ? "A strong match for the themes and stories you have been watching."
+        : "A highly rated title from your library that deserves a spot next.",
+    }));
+
+    const marathons: Array<{ title: string; reason: string; itemIds: string[] }> = [];
+    const usedMarathonKeys = new Set<string>();
+    for (const [genreId, shelfTitle] of Object.entries(GENRE_SHELVES)) {
+      if (marathons.length >= 5) break;
+      const items = rankedCandidates
+        .filter(({ row, key }) => !usedMarathonKeys.has(key) && asGenreIds(row.tmdb_genre_ids).includes(Number(genreId)))
+        .slice(0, 5);
+      if (items.length < 3) continue;
+      items.forEach((item) => usedMarathonKeys.add(item.key));
+      marathons.push({
+        title: shelfTitle,
+        reason: "A focused shelf built from the strongest matching titles in your library.",
+        itemIds: items.map((item) => item.row.id),
+      });
+    }
+
+    const recommendationsData = { recommendations, marathons };
     const { error: saveError } = await adminClient
       .from("profiles")
       .update({
         recommendations: {
+          version: 2,
           updatedAt: new Date().toISOString(),
           data: recommendationsData,
         },
       })
       .eq("id", user.id);
 
-    if (saveError) {
-      console.error("[Recommendations API] Failed to cache results:", saveError);
-    }
-
+    if (saveError) console.error("[Recommendations API] Failed to cache results:", saveError);
     return NextResponse.json(recommendationsData);
-  } catch (err: any) {
-    console.error("[Recommendations API] Server error:", err);
-    return NextResponse.json({ error: err.message || "Internal Server Error" }, { status: 500 });
+  } catch (error) {
+    console.error("[Recommendations API] Server error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }

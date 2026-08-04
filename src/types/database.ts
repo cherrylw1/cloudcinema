@@ -56,6 +56,11 @@ export interface Database {
           runtime: number | null
           file_size: number | null
           tmdb_id: number | null
+          tmdb_popularity: number | null
+          tmdb_vote_average: number | null
+          tmdb_vote_count: number | null
+          tmdb_genre_ids: Json | null
+          tmdb_original_language: string | null
           mime_type: string | null
           dv_profile: number | null
           audio_codec: string | null
@@ -85,6 +90,11 @@ export interface Database {
           runtime?: number | null
           file_size?: number | null
           tmdb_id?: number | null
+          tmdb_popularity?: number | null
+          tmdb_vote_average?: number | null
+          tmdb_vote_count?: number | null
+          tmdb_genre_ids?: Json | null
+          tmdb_original_language?: string | null
           mime_type?: string | null
           dv_profile?: number | null
           audio_codec?: string | null
@@ -114,6 +124,11 @@ export interface Database {
           runtime?: number | null
           file_size?: number | null
           tmdb_id?: number | null
+          tmdb_popularity?: number | null
+          tmdb_vote_average?: number | null
+          tmdb_vote_count?: number | null
+          tmdb_genre_ids?: Json | null
+          tmdb_original_language?: string | null
           mime_type?: string | null
           dv_profile?: number | null
           audio_codec?: string | null
@@ -127,6 +142,29 @@ export interface Database {
           taste_analysis?: Json | null
           embedding?: number[] | null
           created_at?: string
+          updated_at?: string
+        }
+      }
+      library_sync_state: {
+        Row: {
+          id: string
+          root_folder_id: string
+          change_page_token: string
+          last_full_sync_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          root_folder_id: string
+          change_page_token: string
+          last_full_sync_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          root_folder_id?: string
+          change_page_token?: string
+          last_full_sync_at?: string | null
           updated_at?: string
         }
       }

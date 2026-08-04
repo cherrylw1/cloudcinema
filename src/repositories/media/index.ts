@@ -81,6 +81,11 @@ export interface Media {
   runtime?: number | null;
   fileSize?: number | null;
   tmdbId?: number | null;
+  tmdbPopularity?: number | null;
+  tmdbVoteAverage?: number | null;
+  tmdbVoteCount?: number | null;
+  tmdbGenreIds?: number[] | null;
+  tmdbOriginalLanguage?: string | null;
   mimeType?: string | null;
   dvProfile?: number | null;
   audioCodec?: string | null;

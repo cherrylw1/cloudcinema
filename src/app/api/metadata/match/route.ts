@@ -67,6 +67,11 @@ export async function POST(request: NextRequest) {
         poster_path: string | null;
         backdrop_path: string | null;
         runtime: number | null;
+        popularity?: number;
+        vote_average?: number;
+        vote_count?: number;
+        genres?: Array<{ id: number }>;
+        original_language?: string;
       };
 
       const posterUrl = movieDetails.poster_path
@@ -85,6 +90,11 @@ export async function POST(request: NextRequest) {
           backdrop_url: backdropUrl,
           overview: movieDetails.overview || null,
           runtime: movieDetails.runtime ?? null,
+          tmdb_popularity: movieDetails.popularity ?? null,
+          tmdb_vote_average: movieDetails.vote_average ?? null,
+          tmdb_vote_count: movieDetails.vote_count ?? null,
+          tmdb_genre_ids: movieDetails.genres?.map((genre) => genre.id) ?? [],
+          tmdb_original_language: movieDetails.original_language ?? null,
         })
         .eq("id", mediaId!);
 
@@ -118,6 +128,9 @@ export async function POST(request: NextRequest) {
         genre_ids?: number[];
         genres?: Array<{ id: number }>;
         original_language: string;
+        popularity?: number;
+        vote_average?: number;
+        vote_count?: number;
       };
 
       const posterUrl = tvDetails.poster_path
@@ -146,6 +159,11 @@ export async function POST(request: NextRequest) {
           backdrop_url: backdropUrl,
           overview: tvDetails.overview || null,
           runtime,
+          tmdb_popularity: tvDetails.popularity ?? null,
+          tmdb_vote_average: tvDetails.vote_average ?? null,
+          tmdb_vote_count: tvDetails.vote_count ?? null,
+          tmdb_genre_ids: genreIds,
+          tmdb_original_language: tvDetails.original_language,
           media_type: mediaType,
         })
         .eq("series", seriesName!);

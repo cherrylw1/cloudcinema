@@ -172,6 +172,11 @@ export class MetadataSyncService {
       backdrop_url: backdropUrl,
       overview: tmdbMatch.overview,
       runtime: tmdbMatch.runtime,
+      tmdb_popularity: tmdbMatch.popularity,
+      tmdb_vote_average: tmdbMatch.voteAverage,
+      tmdb_vote_count: tmdbMatch.voteCount,
+      tmdb_genre_ids: tmdbMatch.genreIds,
+      tmdb_original_language: tmdbMatch.originalLanguage,
       ...(updatedMediaType ? { media_type: updatedMediaType } : {}),
     };
 

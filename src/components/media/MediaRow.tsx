@@ -45,7 +45,7 @@ export function MediaRow({ title, items, variant = "portrait", description }: Me
         {/* Left scroll arrow */}
         <button
           onClick={() => scroll("left")}
-          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 h-9 w-9 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-all duration-200 hover:scale-110 cursor-pointer"
+          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 hidden h-9 w-9 rounded-full items-center justify-center opacity-0 transition-all duration-200 hover:scale-110 cursor-pointer md:flex md:group-hover/row:opacity-100"
           style={{
             background: "rgba(20,20,30,0.85)",
             backdropFilter: "blur(16px)",
@@ -62,16 +62,16 @@ export function MediaRow({ title, items, variant = "portrait", description }: Me
         {/* Scrollable row */}
         <div
           ref={rowRef}
-          className="flex gap-3 overflow-x-auto scrollbar-none pb-2"
-          style={{ scrollSnapType: "x mandatory" }}
+          className="flex snap-x gap-3 overflow-x-auto overscroll-x-contain pb-2 scrollbar-none touch-pan-x sm:gap-4"
+          style={{ scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }}
         >
           {items.map((media) => (
             <div
               key={media.id}
               className={
                 variant === "portrait"
-                  ? "w-44 sm:w-48 flex-shrink-0"
-                  : "w-72 sm:w-80 flex-shrink-0"
+                  ? "w-[8.5rem] flex-shrink-0 sm:w-44 md:w-48"
+                  : "w-[18rem] flex-shrink-0 sm:w-72 md:w-80"
               }
               style={{ scrollSnapAlign: "start" }}
             >
@@ -83,7 +83,7 @@ export function MediaRow({ title, items, variant = "portrait", description }: Me
         {/* Right scroll arrow */}
         <button
           onClick={() => scroll("right")}
-          className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 h-9 w-9 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-all duration-200 hover:scale-110 cursor-pointer"
+          className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 hidden h-9 w-9 rounded-full items-center justify-center opacity-0 transition-all duration-200 hover:scale-110 cursor-pointer md:flex md:group-hover/row:opacity-100"
           style={{
             background: "rgba(20,20,30,0.85)",
             backdropFilter: "blur(16px)",

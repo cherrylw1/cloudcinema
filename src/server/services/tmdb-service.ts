@@ -6,6 +6,9 @@ export interface TmdbMetadata {
   runtime: number | null;
   genreIds: number[];
   originalLanguage: string;
+  popularity: number | null;
+  voteAverage: number | null;
+  voteCount: number | null;
   id: number;
 }
 
@@ -57,6 +60,9 @@ export class TmdbService {
         backdrop_path: string | null;
         genre_ids: number[];
         original_language: string;
+        popularity?: number;
+        vote_average?: number;
+        vote_count?: number;
         release_date?: string;
       }>;
     }
@@ -106,6 +112,9 @@ export class TmdbService {
       runtime,
       genreIds: bestMatch.genre_ids || [],
       originalLanguage: bestMatch.original_language,
+      popularity: bestMatch.popularity ?? null,
+      voteAverage: bestMatch.vote_average ?? null,
+      voteCount: bestMatch.vote_count ?? null,
     };
   }
 
@@ -119,6 +128,9 @@ export class TmdbService {
         backdrop_path: string | null;
         genre_ids: number[];
         original_language: string;
+        popularity?: number;
+        vote_average?: number;
+        vote_count?: number;
       }>;
     }
 
@@ -153,6 +165,9 @@ export class TmdbService {
       runtime,
       genreIds: bestMatch.genre_ids || [],
       originalLanguage: bestMatch.original_language,
+      popularity: bestMatch.popularity ?? null,
+      voteAverage: bestMatch.vote_average ?? null,
+      voteCount: bestMatch.vote_count ?? null,
     };
   }
 
