@@ -30,7 +30,6 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        if: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID != '' && secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY != '' }}
         run: npm ci
 
       - name: Migrate browser media
@@ -45,5 +44,4 @@ jobs:
           CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
           CLOUDFLARE_R2_BUCKET: ${{ secrets.CLOUDFLARE_R2_BUCKET }}
           R2_MIGRATION_PAGE_SIZE: "5"
-        if: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID != '' && secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY != '' }}
         run: npx tsx scripts/migrate-hls-to-r2.ts "${{ inputs.media_id || 'batch' }}"
