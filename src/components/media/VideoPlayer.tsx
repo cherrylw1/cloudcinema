@@ -16,7 +16,7 @@ import {
 import { VideoPlayer as CapVideoPlayer } from "@capgo/capacitor-video-player";
 import type { capVideoPlayerOptions } from "@capgo/capacitor-video-player";
 import type { PluginListenerHandle } from "@capacitor/core";
-import { rememberNativeApp } from "@/lib/platform";
+import { isNativeApp, rememberNativeApp } from "@/lib/platform";
 
 interface VideoPlayerProps {
   media: Media;
@@ -166,6 +166,22 @@ export function VideoPlayer({
       : "";
     return `${window.location.origin}/api/stream/${activeMedia.id}/${streamToken}/${userId}${variantPath}/video.mp4`;
   }, [activeMedia, selectedAudioVariant, streamToken, userId]);
+
+  const getJustPlayerUrl = useCallback(() => {
+    const streamUrl = getAbsoluteStreamUrl();
+    if (!streamUrl) return "#";
+
+    // Native Capacitor builds can launch Just Player directly without asking
+    // the TV browser to parse an intent URI.
+    const nativeRuntime = isNative || (typeof window !== "undefined" && isNativeApp());
+    if (nativeRuntime) {
+      return `cloudcinema://launch-player?player=just&url=${encodeURIComponent(streamUrl)}`;
+    }
+
+    // Browsers that support Android intents launch Just Player; unsupported
+    // TV browsers can fall back to the same authenticated stream URL.
+    return `intent://${streamUrl.replace(/^https?:\/\//, "")}#Intent;package=com.brouken.player;scheme=https;type=video/*;S.browser_fallback_url=${encodeURIComponent(streamUrl)};end`;
+  }, [getAbsoluteStreamUrl, isNative]);
 
   // ── Controls visibility timer ─────────────────────────────────────────────
   const revealControls = useCallback(() => {
@@ -1123,7 +1139,7 @@ export function VideoPlayer({
               <span className="text-[10px] font-bold text-foreground/45 uppercase tracking-wider pl-0.5">Android / Android TV</span>
               <div className="flex flex-wrap gap-2">
                 <a
-                  href={`intent://${getAbsoluteStreamUrl().replace(/^https?:\/\//, "")}#Intent;package=com.brouken.player;scheme=https;type=video/*;end`}
+                  href={getJustPlayerUrl()}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/10 text-emerald-500 border border-emerald-600/20 hover:bg-emerald-600/20 hover:text-emerald-400 transition-all text-xs font-semibold cursor-pointer active:scale-[0.97] duration-100"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />

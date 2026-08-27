@@ -65,6 +65,27 @@ public class MainActivity extends BridgeActivity {
                     boolean isGoogleAuth = host != null && host.endsWith("google.com");
                     boolean isSupabaseAuth = host != null && host.endsWith("supabase.co")
                         && path != null && path.startsWith("/auth/v1/authorize");
+
+                    if ("cloudcinema".equals(uri.getScheme()) && "launch-player".equals(host)
+                        && "just".equals(uri.getQueryParameter("player"))) {
+                        String streamUrl = uri.getQueryParameter("url");
+                        Uri streamUri = streamUrl == null ? null : Uri.parse(streamUrl);
+                        String streamScheme = streamUri == null ? null : streamUri.getScheme();
+                        if (streamUri != null && ("https".equalsIgnoreCase(streamScheme)
+                            || "http".equalsIgnoreCase(streamScheme))) {
+                            Intent playerIntent = new Intent(Intent.ACTION_VIEW, streamUri);
+                            playerIntent.setPackage("com.brouken.player");
+                            playerIntent.setType("video/*");
+                            view.stopLoading();
+                            try {
+                                startActivity(playerIntent);
+                            } catch (android.content.ActivityNotFoundException e) {
+                                view.loadUrl(streamUrl);
+                            }
+                            return true;
+                        }
+                    }
+
                     if (isGoogleAuth || isSupabaseAuth) {
                         Uri browserUri = isSupabaseAuth ? withNativeCallback(uri) : uri;
                         Intent browserIntent = new Intent(Intent.ACTION_VIEW, browserUri);
