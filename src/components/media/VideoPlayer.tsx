@@ -16,7 +16,8 @@ import {
 import { VideoPlayer as CapVideoPlayer } from "@capgo/capacitor-video-player";
 import type { capVideoPlayerOptions } from "@capgo/capacitor-video-player";
 import type { PluginListenerHandle } from "@capacitor/core";
-import { isNativeApp, rememberNativeApp } from "@/lib/platform";
+import { Capacitor } from "@capacitor/core";
+import { rememberNativeApp } from "@/lib/platform";
 
 interface VideoPlayerProps {
   media: Media;
@@ -173,7 +174,7 @@ export function VideoPlayer({
 
     // Native Capacitor builds can launch Just Player directly without asking
     // the TV browser to parse an intent URI.
-    const nativeRuntime = isNative || (typeof window !== "undefined" && isNativeApp());
+    const nativeRuntime = Capacitor.isNativePlatform();
     if (nativeRuntime) {
       return `cloudcinema://launch-player?player=just&url=${encodeURIComponent(streamUrl)}`;
     }
@@ -181,7 +182,7 @@ export function VideoPlayer({
     // Browsers that support Android intents launch Just Player; unsupported
     // TV browsers can fall back to the same authenticated stream URL.
     return `intent://${streamUrl.replace(/^https?:\/\//, "")}#Intent;package=com.brouken.player;scheme=https;type=video/*;S.browser_fallback_url=${encodeURIComponent(streamUrl)};end`;
-  }, [getAbsoluteStreamUrl, isNative]);
+  }, [getAbsoluteStreamUrl]);
 
   // ── Controls visibility timer ─────────────────────────────────────────────
   const revealControls = useCallback(() => {
