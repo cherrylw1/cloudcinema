@@ -26,7 +26,8 @@ export async function GET(request: Request) {
             refresh_token: data.session.refresh_token,
           });
           const completionUrl = new URL(
-            "https://cherrycinema.netlify.app/api/auth/android/complete",
+            "/api/auth/android/complete",
+            requestUrl.origin,
           );
           completionUrl.hash = session.toString();
           return NextResponse.redirect(completionUrl, 302);

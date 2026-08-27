@@ -41,7 +41,7 @@ export function AppShell({ children }: AppShellProps) {
 
         const isCustomCallback = url.startsWith("cloudcinema://auth-callback");
         const isVerifiedCallback = url.startsWith(
-          "https://cherrycinema.netlify.app/api/auth/android/complete",
+          "https://cloudcinema.vercel.app/api/auth/android/complete",
         );
 
         if (isCustomCallback || isVerifiedCallback) {

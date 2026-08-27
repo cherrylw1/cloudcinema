@@ -44,7 +44,7 @@ public class MainActivity extends BridgeActivity {
                 public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                     super.onReceivedError(view, request, error);
                     if (request != null && request.isForMainFrame()) {
-                        String retryUrl = "https://cherrycinema.netlify.app?platform=app";
+                        String retryUrl = "https://cloudcinema.vercel.app?platform=app";
                         String html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>" +
                             "<style>body{margin:0;background:#08080f;color:#f5f5f7;font-family:sans-serif;display:flex;" +
                             "min-height:100vh;align-items:center;justify-content:center;text-align:center}main{padding:32px}" +

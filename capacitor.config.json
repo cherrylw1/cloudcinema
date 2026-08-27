@@ -4,10 +4,10 @@
   "webDir": "public",
   "appendUserAgent": "CloudCinemaAndroid",
   "server": {
-    "url": "https://cherrycinema.netlify.app?platform=app",
+    "url": "https://cloudcinema.vercel.app?platform=app",
     "cleartext": false,
     "allowNavigation": [
-      "cherrycinema.netlify.app",
+      "cloudcinema.vercel.app",
       "ynegbeilrlkscxzpxvvn.supabase.co",
       "*.supabase.co",
       "accounts.google.com",
